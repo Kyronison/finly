@@ -8,12 +8,12 @@
   gap: 12px;
 }
 
-h3 {
+.title {
   margin: 0;
   font-size: 18px;
 }
 
-p {
+.description {
   margin: 0;
   color: rgba(8, 253, 216, 0.8);
   font-size: 14px;

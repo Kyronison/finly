@@ -7,8 +7,8 @@ interface Props {
 export function StreakCard({ streak }: Props) {
   return (
     <div className={styles.card}>
-      <h3>Игровой прогресс</h3>
-      <p>
+      <h3 className={styles.title}>Игровой прогресс</h3>
+      <p className={styles.description}>
         Вы отмечали финансовые действия {streak} {decline(streak, ['день подряд', 'дня подряд', 'дней подряд'])}. Продолжайте streak,
         чтобы удерживать целевую аллокацию и получать больше очков.
       </p>
