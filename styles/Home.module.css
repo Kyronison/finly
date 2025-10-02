@@ -1,0 +1,61 @@
+.hero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: center;
+  padding: 80px clamp(24px, 6vw, 120px);
+  gap: clamp(32px, 6vw, 120px);
+  min-height: 100vh;
+}
+
+.left h1 {
+  font-size: clamp(36px, 6vw, 60px);
+  margin: 16px 0;
+  line-height: 1.1;
+}
+
+.left p {
+  max-width: 540px;
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.5;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.15);
+  color: rgba(191, 219, 254, 0.95);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 32px 0 0;
+  display: grid;
+  gap: 16px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.list li::before {
+  content: '•';
+  margin-right: 12px;
+  color: #f97316;
+}
+
+.right {
+  display: flex;
+  justify-content: center;
+}
+
+@media (max-width: 768px) {
+  .hero {
+    padding: 48px 24px;
+  }
+}
