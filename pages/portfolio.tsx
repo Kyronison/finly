@@ -32,6 +32,7 @@ interface PortfolioResponse {
     id: string;
     figi: string;
     ticker: string | null;
+    name: string | null;
     instrumentType: string | null;
     balance: number;
     lot: number | null;
