@@ -45,3 +45,92 @@ model Expense {
   date        DateTime  @default(now())
   createdAt   DateTime  @default(now())
 }
+
+model PortfolioConnection {
+  id            String                @id @default(cuid())
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId        String
+  token         String
+  accountId     String?
+  brokerAccountType String?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  lastSyncedAt  DateTime?
+  snapshots     PortfolioSnapshot[]
+  positions     PortfolioPosition[]
+  operations    PortfolioOperation[]
+  dividends     PortfolioDividend[]
+
+  @@unique([userId])
+}
+
+
+model PortfolioSnapshot {
+  id            String               @id @default(cuid())
+  connection    PortfolioConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connectionId  String
+  capturedAt    DateTime
+  totalAmount   Float
+  expectedYield Float?
+  currency      String
+  createdAt     DateTime             @default(now())
+
+  @@index([connectionId, capturedAt])
+}
+
+model PortfolioPosition {
+  id                       String               @id @default(cuid())
+  connection               PortfolioConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connectionId             String
+  figi                     String
+  ticker                   String?
+  name                     String?
+  instrumentType           String?
+  balance                  Float
+  lot                      Float?
+  currentPrice             Float?
+  averagePositionPrice     Float?
+  expectedYield            Float?
+  expectedYieldPercent     Float?
+  currency                 String?
+  updatedAt                DateTime             @default(now())
+
+  @@index([connectionId, figi])
+}
+
+model PortfolioOperation {
+  id             String               @id @default(cuid())
+  connection     PortfolioConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connectionId   String
+  operationId    String
+  figi           String?
+  ticker         String?
+  instrumentType String?
+  operationType  String
+  payment        Float?
+  price          Float?
+  quantity       Float?
+  currency       String?
+  date           DateTime
+  description    String?
+  commission     Float?
+  createdAt      DateTime             @default(now())
+
+  @@unique([connectionId, operationId])
+  @@index([connectionId, date])
+}
+
+model PortfolioDividend {
+  id           String               @id @default(cuid())
+  connection   PortfolioConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  connectionId String
+  figi         String?
+  ticker       String?
+  amount       Float
+  currency     String?
+  paymentDate  DateTime
+  recordDate   DateTime?
+  createdAt    DateTime             @default(now())
+
+  @@index([connectionId, paymentDate])
+}

@@ -21,6 +21,9 @@ export function DashboardLayout({ user, onLogout, children }: Props) {
           <Link href="/dashboard" className={styles.navItem}>
             Отчёт
           </Link>
+          <Link href="/portfolio" className={styles.navItem}>
+            Инвестиции
+          </Link>
         </nav>
         <div className={styles.userCard}>
           <div className={styles.avatar}>{user.name.slice(0, 1).toUpperCase()}</div>
