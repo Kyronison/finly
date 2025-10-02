@@ -7,9 +7,43 @@ import type {
 
 import { prisma } from './prisma';
 
-const DEFAULT_REST_URL = process.env.TBANK_INVEST_API_URL ?? 'https://api-invest.tinkoff.ru/openapi';
+const DEFAULT_REST_URL = process.env.TBANK_INVEST_API_URL ?? 'https://api-invest.tbank.ru/openapi';
 const DEFAULT_STREAM_URL =
-  process.env.TBANK_INVEST_SOCKET_URL ?? 'wss://api-invest.tinkoff.ru/openapi/md/v1/md-openapi/ws';
+  process.env.TBANK_INVEST_SOCKET_URL ?? 'wss://api-invest.tbank.ru/openapi/md/v1/md-openapi/ws';
+
+const TBANK_API_INVALID_BASE_URL_CODE = 'TBANK_API_INVALID_BASE_URL';
+
+function isSdkBaseUrlError(error: unknown): error is Error & { code?: string } {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: string }).code === TBANK_API_INVALID_BASE_URL_CODE,
+  );
+}
+
+async function safeSdkCall<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (error) {
+    if (
+      error instanceof SyntaxError ||
+      (error instanceof Error && /Unexpected token/.test(error.message ?? ''))
+    ) {
+      const enrichedError = Object.assign(
+        new Error(
+          'Получен не-JSON ответ от T-Bank Invest API. Проверьте настройку TBANK_INVEST_API_URL/TBANK_INVEST_SOCKET_URL.',
+        ),
+        {
+          code: TBANK_API_INVALID_BASE_URL_CODE,
+          cause: error,
+        },
+      );
+      throw enrichedError;
+    }
+    throw error;
+  }
+}
 
 function createClient(token: string) {
   return new OpenAPI({ apiURL: DEFAULT_REST_URL, secretToken: token, socketURL: DEFAULT_STREAM_URL });
@@ -76,7 +110,7 @@ async function enrichInstrumentMetadata(
 
   for (const figi of missingFigis) {
     try {
-      const instrument = await client.searchOne({ figi });
+      const instrument = await safeSdkCall(() => client.searchOne({ figi }));
       if (instrument) {
         cache.set(figi, {
           ticker: instrument.ticker ?? undefined,
@@ -123,7 +157,7 @@ function resolveAccount(accounts: UserAccount[], requestedId?: string) {
 
 export async function fetchAccountsPreview(token: string, client?: OpenAPI) {
   const instance = client ?? createClient(token);
-  const { accounts } = await instance.accounts();
+  const { accounts } = await safeSdkCall(() => instance.accounts());
   return ensureArray(accounts);
 }
 
@@ -142,7 +176,7 @@ export async function upsertPortfolioConnection({
   client.setCurrentAccountId(resolvedAccount.brokerAccountId);
 
   // Test access by calling lightweight endpoint
-  await client.portfolio();
+  await safeSdkCall(() => client.portfolio());
 
   const connection = await prisma.portfolioConnection.upsert({
     where: { userId },
@@ -174,12 +208,17 @@ export async function syncTinkoffPortfolio(connectionId: string) {
   client.setCurrentAccountId(resolvedAccount.brokerAccountId);
 
   const [portfolio, currencies, operationsResponse] = await Promise.all([
-    client.portfolio(),
-    client.portfolioCurrencies().catch(() => ({ currencies: [] })),
-    client.operations({
-      from: new Date(new Date().setFullYear(new Date().getFullYear() - 5)).toISOString(),
-      to: new Date().toISOString(),
+    safeSdkCall(() => client.portfolio()),
+    safeSdkCall(() => client.portfolioCurrencies()).catch((error: unknown) => {
+      if (isSdkBaseUrlError(error)) throw error;
+      return { currencies: [] };
     }),
+    safeSdkCall(() =>
+      client.operations({
+        from: new Date(new Date().setFullYear(new Date().getFullYear() - 5)).toISOString(),
+        to: new Date().toISOString(),
+      }),
+    ),
   ]);
 
   const positions = ensureArray(portfolio.positions);
