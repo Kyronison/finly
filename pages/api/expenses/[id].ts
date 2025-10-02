@@ -38,7 +38,7 @@ async function updateExpense(req: NextApiRequest, res: NextApiResponse) {
     if (!numericAmount || Number.isNaN(numericAmount) || numericAmount <= 0) {
       return res.status(400).json({ message: 'Сумма должна быть больше 0' });
     }
-    data.amount = numericAmount.toFixed(2);
+    data.amount = numericAmount;
   }
 
   if (description !== undefined) {

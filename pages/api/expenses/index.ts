@@ -107,7 +107,7 @@ async function createExpense(req: NextApiRequest, res: NextApiResponse) {
 
   const expense = await prisma.expense.create({
     data: {
-      amount: numericAmount.toFixed(2),
+      amount: numericAmount,
       categoryId: categoryId ?? null,
       description: description ?? null,
       date: parsedDate,
