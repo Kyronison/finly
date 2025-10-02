@@ -1,0 +1,43 @@
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+  padding: 24px;
+  border-radius: 20px;
+  background: rgba(19, 17, 25, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  align-items: end;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.field input,
+.field select {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 10, 18, 0.9);
+  color: #fff;
+  padding: 12px 14px;
+  font-size: 15px;
+}
+
+.error {
+  margin: 0;
+  color: #fca5a5;
+}
+
+.submit {
+  padding: 12px 18px;
+  border-radius: 14px;
+  border: none;
+  background: linear-gradient(135deg, #facc15, #f97316);
+  color: #0b0911;
+  font-weight: 600;
+  cursor: pointer;
+}

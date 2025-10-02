@@ -1,0 +1,54 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(20, 18, 26, 0.85);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 16px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.field input,
+.field select {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 9, 15, 0.9);
+  color: #fff;
+  padding: 12px 14px;
+  font-size: 15px;
+}
+
+.field select {
+  appearance: none;
+}
+
+.error {
+  margin: 0;
+  color: #fb7185;
+  font-size: 13px;
+}
+
+.submit {
+  align-self: flex-end;
+  padding: 12px 20px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #22d3ee, #6366f1);
+  color: #04060f;
+  font-weight: 600;
+  cursor: pointer;
+}
