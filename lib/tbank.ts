@@ -7,9 +7,11 @@ import type {
 
 import { prisma } from './prisma';
 
-const DEFAULT_REST_URL = process.env.TBANK_INVEST_API_URL ?? 'https://api-invest.tbank.ru/openapi';
+const DEFAULT_REST_URL =
+  process.env.TBANK_INVEST_API_URL?.trim() || 'https://api-invest.tbank.ru/openapi';
 const DEFAULT_STREAM_URL =
-  process.env.TBANK_INVEST_SOCKET_URL ?? 'wss://api-invest.tbank.ru/openapi/md/v1/md-openapi/ws';
+  process.env.TBANK_INVEST_SOCKET_URL?.trim() ||
+  'wss://api-invest.tbank.ru/openapi/md/v1/md-openapi/ws';
 
 const TBANK_API_INVALID_BASE_URL_CODE = 'TBANK_API_INVALID_BASE_URL';
 

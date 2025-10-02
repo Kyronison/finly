@@ -38,8 +38,10 @@ npm run dev
 
 - `DATABASE_URL` — путь к базе SQLite (по умолчанию `file:./dev.db`).
 - `JWT_SECRET` — секрет для подписи токенов (обязательно заменить в продакшене).
-- `TBANK_INVEST_API_URL` — базовый URL REST API T-Bank Invest (по умолчанию `https://api-invest.tbank.ru/openapi`).
-- `TBANK_INVEST_SOCKET_URL` — URL вебсокет-потока котировок (по умолчанию `wss://api-invest.tbank.ru/openapi/md/v1/md-openapi/ws`).
+- `TBANK_INVEST_API_URL` — базовый URL REST API T-Bank Invest (по умолчанию `https://api-invest.tbank.ru/openapi`; удалите переменную из `.env`, чтобы использовать значение по умолчанию).
+- `TBANK_INVEST_SOCKET_URL` — URL вебсокет-потока котировок (по умолчанию `wss://api-invest.tbank.ru/openapi/md/v1/md-openapi/ws`; удалите переменную из `.env`, чтобы использовать значение по умолчанию).
+
+> ℹ️ Если вы обновляете существующий деплой, освежите локальные и продакшн `.env` файлы (например, пересоздайте их из `.env.example` или удалите старые значения `TBANK_INVEST_API_URL`/`TBANK_INVEST_SOCKET_URL`), чтобы приложение могло использовать новые значения по умолчанию.
 
 ## Работа с портфелем
 
