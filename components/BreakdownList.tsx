@@ -17,7 +17,7 @@ interface Props {
 export function BreakdownList({ items }: Props) {
   return (
     <div className={styles.container}>
-      <h3>Топ расходов</h3>
+      <h3 className={styles.title}>Топ расходов</h3>
       <ul className={styles.list}>
         {items.map((item) => (
           <li key={item.id} className={styles.item}>
