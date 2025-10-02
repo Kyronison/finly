@@ -4,7 +4,12 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { removeSensitiveUserFields, setAuthCookie, signToken } from '@/lib/auth';
 
-const DEFAULT_CATEGORIES = [
+const DEFAULT_CATEGORIES: Array<{
+  name: string;
+  type: 'INCOME' | 'EXPENSE';
+  color: string;
+  budget: number | null;
+}> = [
   { name: 'Зарплата', type: 'INCOME', color: '#39d98a', budget: null },
   { name: 'Инвестиции', type: 'EXPENSE', color: '#f5a524', budget: 30000 },
   { name: 'Продукты', type: 'EXPENSE', color: '#ff6b6b', budget: 20000 },
