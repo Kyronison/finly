@@ -58,7 +58,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     typeof req.query.end === 'string' ? req.query.end : undefined,
   );
 
-  const [expenses, timelineExpenses] = await Promise.all([
+  const [rawExpenses, timelineExpenses] = await Promise.all([
     prisma.expense.findMany({
       where: {
         userId,
@@ -84,7 +84,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     expenses: 0,
   };
 
-  expenses.forEach((expense) => {
+  rawExpenses.forEach((expense) => {
     if (expense.category?.type === 'INCOME') {
       totals.income += Number(expense.amount);
     } else {
@@ -138,11 +138,13 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     });
   }
 
+  const expenses = rawExpenses.map((item) => ({
+    ...item,
+    amount: Number(item.amount),
+  }));
+
   return res.status(200).json({
-    expenses: expenses.map((item) => ({
-      ...item,
-      amount: Number(item.amount),
-    })),
+    expenses,
     totals,
     monthly,
     periodStart: formatISO(start, { representation: 'date' }),
