@@ -1,3 +1,5 @@
+import './networkTls';
+
 import { fetch as undiciFetch } from 'undici';
 
 import { prisma } from './prisma';
