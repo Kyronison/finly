@@ -69,11 +69,20 @@ interface AnalyticsResponse {
 
 export default function Dashboard({ user }: DashboardProps) {
   const router = useRouter();
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const defaultMonth = format(new Date(), 'yyyy-MM');
+  const [startMonth, setStartMonth] = useState(defaultMonth);
+  const [endMonth, setEndMonth] = useState(defaultMonth);
 
-  const analyticsKey = `/api/analytics/overview?month=${selectedMonth}`;
-  const categoriesKey = `/api/categories?month=${selectedMonth}`;
-  const expensesKey = `/api/expenses?month=${selectedMonth}`;
+  const periodQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set('start', startMonth);
+    params.set('end', endMonth);
+    return params.toString();
+  }, [startMonth, endMonth]);
+
+  const analyticsKey = `/api/analytics/overview?${periodQuery}`;
+  const categoriesKey = `/api/categories?${periodQuery}`;
+  const expensesKey = `/api/expenses?${periodQuery}`;
 
   const analytics = useSWR<AnalyticsResponse>(analyticsKey);
   const categories = useSWR<{ categories: Category[] }>(categoriesKey);

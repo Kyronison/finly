@@ -5,19 +5,36 @@ import { endOfMonth, parseISO, startOfMonth } from 'date-fns';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 
-function resolveMonthRange(month?: string) {
-  if (!month) {
-    const now = new Date();
-    return { start: startOfMonth(now), end: endOfMonth(now) };
-  }
+function parseBoundary(value?: string) {
+  if (!value) return null;
 
-  const parsed = parseISO(`${month}-01`);
+  const normalized = value.length === 7 ? `${value}-01` : value;
+  const parsed = parseISO(normalized);
   if (Number.isNaN(parsed.getTime())) {
-    const now = new Date();
-    return { start: startOfMonth(now), end: endOfMonth(now) };
+    return null;
   }
 
-  return { start: startOfMonth(parsed), end: endOfMonth(parsed) };
+  return parsed;
+}
+
+function resolvePeriod(startRaw?: string, endRaw?: string) {
+  const now = new Date();
+  const fallbackStart = startOfMonth(now);
+  const fallbackEnd = endOfMonth(now);
+
+  const parsedStart = parseBoundary(startRaw);
+  const parsedEnd = parseBoundary(endRaw);
+
+  let start = startOfMonth(parsedStart ?? fallbackStart);
+  let end = endOfMonth(parsedEnd ?? fallbackEnd);
+
+  if (start.getTime() > end.getTime()) {
+    const tmp = start;
+    start = startOfMonth(end);
+    end = endOfMonth(tmp);
+  }
+
+  return { start, end };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -37,8 +54,10 @@ async function getCategories(req: NextApiRequest, res: NextApiResponse) {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  const { month } = req.query;
-  const { start, end } = resolveMonthRange(typeof month === 'string' ? month : undefined);
+  const { start, end } = resolvePeriod(
+    typeof req.query.start === 'string' ? req.query.start : undefined,
+    typeof req.query.end === 'string' ? req.query.end : undefined,
+  );
 
   const [categories, operations] = await Promise.all([
     prisma.category.findMany({
