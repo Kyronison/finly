@@ -132,6 +132,15 @@ type OperationsResponse = {
   operations?: ApiOperation[] | null;
 };
 
+type ApiHistoricCandle = {
+  time?: string | null;
+  close?: ApiQuotation | null;
+};
+
+type GetCandlesResponse = {
+  candles?: ApiHistoricCandle[] | null;
+};
+
 type Instrument = {
   figi?: string | null;
   ticker?: string | null;
@@ -177,6 +186,7 @@ type NormalizedOperation = {
   description: string | null;
   state: string;
   commission: number | null;
+  hasTradeQuantity: boolean;
 };
 
 type InstrumentMeta = {
@@ -185,6 +195,13 @@ type InstrumentMeta = {
   instrumentType?: string;
   lot?: number | null;
   currency?: string | null;
+};
+
+type PortfolioSnapshotPoint = {
+  date: Date;
+  currency: string;
+  total: number;
+  expectedYield?: number | null;
 };
 
 async function callRest<TResponse>(
@@ -296,11 +313,62 @@ function normalizeOperation(operation: ApiOperation): NormalizedOperation | null
   const state = operation.state ?? 'OPERATION_STATE_UNSPECIFIED';
   const rawOperationType = operation.operationType ?? null;
   const payment = moneyValueToNumber(operation.payment);
-  const price = moneyValueToNumber(operation.price);
+  const initialPrice = moneyValueToNumber(operation.price);
   const quantity = parseNumber(operation.quantity);
   const quantityRest = parseNumber(operation.quantityRest);
   const executedQuantity = quantity != null ? quantity - (quantityRest ?? 0) : null;
   const commission = moneyValueToNumber(operation.commission);
+
+  let normalizedPrice = initialPrice;
+  let normalizedQuantity =
+    executedQuantity != null && Number.isFinite(executedQuantity)
+      ? executedQuantity
+      : quantity;
+
+  if (normalizedQuantity != null && !Number.isFinite(normalizedQuantity)) {
+    normalizedQuantity = null;
+  }
+
+  let hasTradeQuantity = false;
+  const tradeSummaries = ensureArray(operation.trades)
+    .map((trade) => ({
+      price: moneyValueToNumber(trade?.price),
+      quantity: parseNumber(trade?.quantity),
+    }))
+    .filter((trade) =>
+      typeof trade.price === 'number' &&
+      Number.isFinite(trade.price) &&
+      typeof trade.quantity === 'number' &&
+      Number.isFinite(trade.quantity),
+    );
+
+  if (tradeSummaries.length > 0) {
+    let totalQuantity = 0;
+    let totalValue = 0;
+    tradeSummaries.forEach((trade) => {
+      totalQuantity += trade.quantity ?? 0;
+      totalValue += (trade.price ?? 0) * (trade.quantity ?? 0);
+    });
+
+    if (Number.isFinite(totalQuantity) && Math.abs(totalQuantity) > 0) {
+      normalizedQuantity = totalQuantity;
+      hasTradeQuantity = true;
+      if (Number.isFinite(totalValue)) {
+        const average = totalValue / totalQuantity;
+        if (Number.isFinite(average)) {
+          normalizedPrice = average;
+        }
+      }
+    }
+  }
+
+  if (normalizedQuantity != null && Math.abs(normalizedQuantity) === 0) {
+    normalizedQuantity = 0;
+  }
+
+  if (normalizedPrice != null && !Number.isFinite(normalizedPrice)) {
+    normalizedPrice = null;
+  }
 
   return {
     id: operation.id,
@@ -310,13 +378,14 @@ function normalizeOperation(operation: ApiOperation): NormalizedOperation | null
       humanizeOperationType(rawOperationType) ?? operation.type ?? humanizeOperationType(state) ?? 'Operation',
     rawOperationType,
     payment,
-    price,
-    quantity: executedQuantity ?? quantity ?? null,
+    price: normalizedPrice,
+    quantity: normalizedQuantity,
     currency: operation.currency ?? operation.payment?.currency ?? null,
     date: operation.date,
     description: operation.description ?? operation.type ?? humanizeOperationType(rawOperationType),
     state,
     commission,
+    hasTradeQuantity,
   };
 }
 
@@ -336,32 +405,194 @@ function normalizePortfolioPosition(position: ApiPortfolioPosition): NormalizedP
   };
 }
 
-function aggregateTimeline(operations: NormalizedOperation[]) {
-  const daily = new Map<string, Map<string, number>>();
-  operations.forEach((operation) => {
-    if (!operation.date || typeof operation.payment !== 'number' || Number.isNaN(operation.payment)) return;
-    const date = operation.date.slice(0, 10);
-    const currency = operation.currency ?? 'RUB';
-    const bucket = daily.get(date) ?? new Map<string, number>();
-    bucket.set(currency, (bucket.get(currency) ?? 0) + operation.payment);
-    daily.set(date, bucket);
+async function buildPortfolioSnapshots(
+  token: string,
+  operations: NormalizedOperation[],
+): Promise<PortfolioSnapshotPoint[]> {
+  const validOperations = operations.filter((operation) => Boolean(operation.date));
+  if (validOperations.length === 0) {
+    return [];
+  }
+
+  const sortedOperations = [...validOperations].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+
+  const startDate = new Date(sortedOperations[0].date);
+  startDate.setUTCHours(0, 0, 0, 0);
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+
+  const isMeaningfulQuantity = (value: number | null | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) && Math.abs(value) > 1e-6;
+
+  const tradeFigis = new Set<string>();
+  sortedOperations.forEach((operation) => {
+    if (!operation.figi) return;
+    if (!isMeaningfulQuantity(operation.quantity) && !operation.hasTradeQuantity) {
+      return;
+    }
+    tradeFigis.add(operation.figi);
   });
 
-  const sortedDays = Array.from(daily.keys()).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-  const running = new Map<string, number>();
-  const snapshots: Array<{ date: Date; currency: string; total: number; expectedYield?: number | null }> = [];
+  const priceHistory = new Map<string, Map<string, number>>();
+  for (const figi of tradeFigis) {
+    try {
+      const candles = await fetchDailyClosePrices(token, figi, startDate, today);
+      priceHistory.set(figi, candles);
+    } catch (error) {
+      console.error('Failed to load candles for instrument', figi, error);
+    }
+  }
 
-  sortedDays.forEach((day) => {
-    const point = daily.get(day);
-    if (!point) return;
-    point.forEach((value, currency) => {
-      const next = (running.get(currency) ?? 0) + value;
-      running.set(currency, next);
-      snapshots.push({ date: new Date(`${day}T00:00:00.000Z`), currency, total: roundNumber(next) ?? 0 });
+  const operationsByDay = new Map<string, NormalizedOperation[]>();
+  sortedOperations.forEach((operation) => {
+    const day = operation.date.slice(0, 10);
+    const bucket = operationsByDay.get(day) ?? [];
+    bucket.push(operation);
+    operationsByDay.set(day, bucket);
+  });
+
+  const positions = new Map<string, { quantity: number; currency: string | null }>();
+  const cashByCurrency = new Map<string, number>();
+  const lastPriceByFigi = new Map<string, number>();
+  const snapshots: PortfolioSnapshotPoint[] = [];
+
+  for (let cursor = new Date(startDate); cursor.getTime() <= today.getTime(); cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    const dayKey = cursor.toISOString().slice(0, 10);
+
+    priceHistory.forEach((candles, figi) => {
+      const close = candles.get(dayKey);
+      if (typeof close === 'number' && Number.isFinite(close)) {
+        lastPriceByFigi.set(figi, close);
+      }
     });
-  });
+
+    const dayOperations = operationsByDay.get(dayKey) ?? [];
+    dayOperations.forEach((operation) => {
+      const currency = operation.currency ?? 'RUB';
+      if (typeof operation.payment === 'number' && Number.isFinite(operation.payment)) {
+        cashByCurrency.set(currency, (cashByCurrency.get(currency) ?? 0) + operation.payment);
+      }
+      if (typeof operation.commission === 'number' && Number.isFinite(operation.commission)) {
+        cashByCurrency.set(currency, (cashByCurrency.get(currency) ?? 0) - operation.commission);
+      }
+
+      const normalizedQuantity = isMeaningfulQuantity(operation.quantity)
+        ? (operation.quantity as number)
+        : null;
+
+      if (operation.figi && normalizedQuantity != null) {
+        const rawType = (operation.rawOperationType ?? '').toUpperCase();
+        let quantityChange = 0;
+        if (rawType.includes('SELL')) {
+          quantityChange = -normalizedQuantity;
+        } else if (rawType.includes('BUY')) {
+          quantityChange = normalizedQuantity;
+        } else if (typeof operation.payment === 'number' && Number.isFinite(operation.payment)) {
+          quantityChange = operation.payment > 0 ? -normalizedQuantity : normalizedQuantity;
+        } else {
+          quantityChange = normalizedQuantity;
+        }
+
+        const position = positions.get(operation.figi) ?? { quantity: 0, currency: operation.currency ?? null };
+        position.quantity += quantityChange;
+        if (!position.currency) {
+          position.currency = operation.currency ?? null;
+        }
+        positions.set(operation.figi, position);
+
+        const tradePrice =
+          typeof operation.price === 'number' && Number.isFinite(operation.price)
+            ? operation.price
+            : typeof operation.payment === 'number' &&
+                Number.isFinite(operation.payment) &&
+                normalizedQuantity !== 0
+              ? Math.abs(operation.payment) / Math.abs(normalizedQuantity)
+              : null;
+
+        if (tradePrice != null && Number.isFinite(tradePrice)) {
+          const priceMap = priceHistory.get(operation.figi) ?? new Map<string, number>();
+          priceMap.set(dayKey, tradePrice);
+          priceHistory.set(operation.figi, priceMap);
+          lastPriceByFigi.set(operation.figi, tradePrice);
+        }
+      }
+    });
+
+    const totalsByCurrency = new Map<string, number>();
+    cashByCurrency.forEach((cash, currency) => {
+      if (!Number.isFinite(cash)) return;
+      if (Math.abs(cash) < 0.0001) return;
+      totalsByCurrency.set(currency, (totalsByCurrency.get(currency) ?? 0) + cash);
+    });
+
+    positions.forEach((position, figi) => {
+      if (!Number.isFinite(position.quantity) || Math.abs(position.quantity) < 0.0001) return;
+      const priceMap = priceHistory.get(figi);
+      let price = priceMap?.get(dayKey);
+      if (price == null) {
+        price = lastPriceByFigi.get(figi) ?? null;
+      }
+      if (price == null) return;
+      lastPriceByFigi.set(figi, price);
+      const currency = position.currency ?? 'RUB';
+      const value = position.quantity * price;
+      totalsByCurrency.set(currency, (totalsByCurrency.get(currency) ?? 0) + value);
+    });
+
+    totalsByCurrency.forEach((total, currency) => {
+      const rounded = roundNumber(total);
+      snapshots.push({
+        date: new Date(`${dayKey}T00:00:00.000Z`),
+        currency,
+        total: typeof rounded === 'number' ? rounded : total,
+        expectedYield: null,
+      });
+    });
+  }
 
   return snapshots;
+}
+
+async function fetchDailyClosePrices(token: string, figi: string, from: Date, to: Date) {
+  const result = new Map<string, number>();
+  const rangeStart = new Date(from);
+  const rangeEnd = new Date(to);
+
+  let cursor = new Date(rangeStart);
+  while (cursor.getTime() <= rangeEnd.getTime()) {
+    const chunkStart = new Date(cursor);
+    const chunkEnd = new Date(cursor);
+    chunkEnd.setUTCDate(chunkEnd.getUTCDate() + 364);
+    if (chunkEnd.getTime() > rangeEnd.getTime()) {
+      chunkEnd.setTime(rangeEnd.getTime());
+    }
+
+    const response = await callRest<GetCandlesResponse>(token, 'MarketDataService', 'GetCandles', {
+      figi,
+      interval: 'CANDLE_INTERVAL_DAY',
+      from: chunkStart.toISOString(),
+      to: new Date(chunkEnd.getTime() + 1_000).toISOString(),
+    });
+
+    ensureArray(response.candles).forEach((candle) => {
+      if (!candle.time) return;
+      const close = quotationToNumber(candle.close);
+      if (close == null) return;
+      const day = candle.time.slice(0, 10);
+      result.set(day, close);
+    });
+
+    if (chunkEnd.getTime() >= rangeEnd.getTime()) {
+      break;
+    }
+
+    cursor = new Date(chunkEnd);
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  return result;
 }
 
 async function enrichInstrumentMetadata(
@@ -536,7 +767,7 @@ export async function syncTinkoffPortfolio(connectionId: string) {
 
   const instrumentMeta = await enrichInstrumentMetadata(connection.token, positions, operations);
 
-  const snapshotsFromOperations = aggregateTimeline(operations);
+  const snapshotsFromOperations = await buildPortfolioSnapshots(connection.token, operations);
 
   const currencyTotals = new Map<string, { total: number; yield: number }>();
   positions.forEach((position) => {
