@@ -40,6 +40,34 @@
   padding: 8px 12px;
 }
 
+.timeframeGroup {
+  display: flex;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  padding: 4px;
+  border-radius: 12px;
+}
+
+.timeframeButton {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+.timeframeButton:hover {
+  color: #fff;
+}
+
+.timeframeButtonActive {
+  background: rgba(56, 189, 248, 0.16);
+  color: #fff;
+}
+
 .metric {
   display: flex;
   flex-direction: column;
