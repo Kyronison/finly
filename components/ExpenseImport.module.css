@@ -1,0 +1,103 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: rgba(20, 18, 26, 0.85);
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.caption {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.modeToggle {
+  display: inline-flex;
+  gap: 12px;
+  background: rgba(10, 9, 15, 0.9);
+  border-radius: 999px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  align-self: flex-start;
+}
+
+.modeOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+
+.modeOption input {
+  accent-color: #22d3ee;
+}
+
+.actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.uploadButton {
+  padding: 12px 20px;
+  border-radius: 999px;
+  border: none;
+  background: linear-gradient(135deg, #22d3ee, #6366f1);
+  color: #04060f;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.uploadButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hint {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.error {
+  margin: 0;
+  color: #fb7185;
+  font-size: 13px;
+}
+
+.result {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.summary {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.75);
+  flex-wrap: wrap;
+}
+
+.summary strong {
+  color: #fff;
+}
