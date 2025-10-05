@@ -85,6 +85,10 @@ function parseDate(raw: string): string | null {
   return date.toISOString().slice(0, 10);
 }
 
+function findHeaderIndex(cells: string[], keywords: string[]): number {
+  return cells.findIndex((cell) => keywords.some((keyword) => cell.includes(keyword)));
+}
+
 function parseTable(content: string): ParseResult {
   const lines = content
     .split(/\r?\n/)
@@ -98,10 +102,10 @@ function parseTable(content: string): ParseResult {
   const delimiter = detectDelimiter(lines[0]);
   const headerCells = lines[0].split(delimiter).map(normaliseHeader);
 
-  const dateIndex = headerCells.findIndex((cell) => cell.includes('дата'));
-  const categoryIndex = headerCells.findIndex((cell) => cell.includes('катег'));
-  const amountIndex = headerCells.findIndex((cell) => cell.includes('стоим') || cell.includes('сумм'));
-  const commentIndex = headerCells.findIndex((cell) => cell.includes('коммент') || cell.includes('опис'));
+  const dateIndex = findHeaderIndex(headerCells, ['дата', 'date']);
+  const categoryIndex = findHeaderIndex(headerCells, ['катег', 'стат', 'доход', 'расход', 'article']);
+  const amountIndex = findHeaderIndex(headerCells, ['стоим', 'сумм', 'amount', 'price']);
+  const commentIndex = findHeaderIndex(headerCells, ['коммент', 'опис', 'note', 'comment']);
 
   const operations: ParsedOperation[] = [];
   let skipped = 0;
