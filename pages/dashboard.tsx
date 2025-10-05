@@ -188,6 +188,11 @@ export default function Dashboard({ user }: DashboardProps) {
         />
       </section>
 
+      <section className={styles.gridTwoColumn}>
+        <ExpenseImport onImported={handleOperationsChanged} />
+        <IncomeImport onImported={handleOperationsChanged} />
+      </section>
+
       <section className={styles.gridSingle}>
         <ExpenseImport onImported={handleOperationsChanged} />
       </section>
