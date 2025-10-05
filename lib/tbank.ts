@@ -408,7 +408,6 @@ function normalizePortfolioPosition(position: ApiPortfolioPosition): NormalizedP
 async function buildPortfolioSnapshots(
   token: string,
   operations: NormalizedOperation[],
-  instrumentMeta: Map<string, InstrumentMeta>,
 ): Promise<PortfolioSnapshotPoint[]> {
   const validOperations = operations.filter((operation) => Boolean(operation.date));
   if (validOperations.length === 0) {
@@ -427,35 +426,10 @@ async function buildPortfolioSnapshots(
   const isMeaningfulQuantity = (value: number | null | undefined) =>
     typeof value === 'number' && Number.isFinite(value) && Math.abs(value) > 1e-6;
 
-  const resolveLotSize = (figi: string | null | undefined) => {
-    if (!figi) return 1;
-    const lot = instrumentMeta.get(figi)?.lot;
-    if (typeof lot === 'number' && Number.isFinite(lot) && lot > 0) {
-      return lot;
-    }
-    return 1;
-  };
-
-  const normalizeQuantityToUnits = (
-    figi: string | null | undefined,
-    quantity: number | null | undefined,
-  ) => {
-    if (typeof quantity !== 'number' || !Number.isFinite(quantity)) {
-      return null;
-    }
-    const lotSize = resolveLotSize(figi);
-    const units = quantity * lotSize;
-    if (!Number.isFinite(units)) {
-      return null;
-    }
-    return units;
-  };
-
   const tradeFigis = new Set<string>();
   sortedOperations.forEach((operation) => {
     if (!operation.figi) return;
-    const quantityInUnits = normalizeQuantityToUnits(operation.figi, operation.quantity);
-    if (!isMeaningfulQuantity(quantityInUnits) && !operation.hasTradeQuantity) {
+    if (!isMeaningfulQuantity(operation.quantity) && !operation.hasTradeQuantity) {
       return;
     }
     tradeFigis.add(operation.figi);
@@ -504,9 +478,8 @@ async function buildPortfolioSnapshots(
         cashByCurrency.set(currency, (cashByCurrency.get(currency) ?? 0) - operation.commission);
       }
 
-      const rawQuantityInUnits = normalizeQuantityToUnits(operation.figi, operation.quantity);
-      const normalizedQuantity = isMeaningfulQuantity(rawQuantityInUnits)
-        ? (rawQuantityInUnits as number)
+      const normalizedQuantity = isMeaningfulQuantity(operation.quantity)
+        ? (operation.quantity as number)
         : null;
 
       if (operation.figi && normalizedQuantity != null) {
@@ -794,11 +767,7 @@ export async function syncTinkoffPortfolio(connectionId: string) {
 
   const instrumentMeta = await enrichInstrumentMetadata(connection.token, positions, operations);
 
-  const snapshotsFromOperations = await buildPortfolioSnapshots(
-    connection.token,
-    operations,
-    instrumentMeta,
-  );
+  const snapshotsFromOperations = await buildPortfolioSnapshots(connection.token, operations);
 
   const currencyTotals = new Map<string, { total: number; yield: number }>();
   positions.forEach((position) => {
