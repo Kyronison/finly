@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, ChangeEvent } from 'react';
 import type { GetServerSideProps } from 'next';
 import jwt from 'jsonwebtoken';
 import { format } from 'date-fns';
@@ -73,6 +73,38 @@ export default function Dashboard({ user }: DashboardProps) {
   const [startMonth, setStartMonth] = useState(defaultMonth);
   const [endMonth, setEndMonth] = useState(defaultMonth);
 
+  const formatMonthLabel = useCallback((month: string) => {
+    try {
+      const parsed = new Date(`${month}-01T00:00:00`);
+      if (Number.isNaN(parsed.getTime())) return '';
+      const formatted = format(parsed, 'LLLL yyyy', { locale: ru });
+      return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    } catch (error) {
+      return '';
+    }
+  }, []);
+
+  const periodLabel = useMemo(() => {
+    const startLabel = formatMonthLabel(startMonth);
+    const endLabel = formatMonthLabel(endMonth);
+
+    if (!startLabel || !endLabel) return '';
+    if (startLabel === endLabel) return startLabel;
+    return `${startLabel} — ${endLabel}`;
+  }, [endMonth, formatMonthLabel, startMonth]);
+
+  const handleStartChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setStartMonth(value);
+    setEndMonth((previous) => (previous < value ? value : previous));
+  }, []);
+
+  const handleEndChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
+    const value = event.target.value;
+    setEndMonth(value);
+    setStartMonth((previous) => (previous > value ? value : previous));
+  }, []);
+
   const periodQuery = useMemo(() => {
     const params = new URLSearchParams();
     params.set('start', startMonth);
@@ -104,17 +136,6 @@ export default function Dashboard({ user }: DashboardProps) {
     [categories.data],
   );
 
-  const selectedMonthLabel = useMemo(() => {
-    try {
-      const parsed = new Date(`${startMonth}-01T00:00:00`);
-      if (Number.isNaN(parsed.getTime())) return '';
-      const formatted = format(parsed, 'LLLL yyyy', { locale: ru });
-      return formatted.charAt(0).toUpperCase() + formatted.slice(1);
-    } catch (error) {
-      return '';
-    }
-  }, [startMonth]);
-
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.replace('/');
@@ -131,25 +152,25 @@ export default function Dashboard({ user }: DashboardProps) {
       <div className={styles.headerRow}>
         <div>
           <h1>Финансовый отчёт</h1>
-          <p>Месяц: {selectedMonthLabel}</p>
+          <p>Период: {periodLabel}</p>
         </div>
-        <input
-          type="month"
-          className={styles.monthPicker}
-          value={startMonth}
-          onChange={(event) => {
-            const value = event.target.value;
-            setStartMonth(value);
-            setEndMonth(value);
-          }}
-        />
+        <div className={styles.periodPickerGroup}>
+          <label className={styles.periodPicker}>
+            <span>Начало периода</span>
+            <input type="month" value={startMonth} onChange={handleStartChange} />
+          </label>
+          <label className={styles.periodPicker}>
+            <span>Конец периода</span>
+            <input type="month" value={endMonth} onChange={handleEndChange} />
+          </label>
+        </div>
       </div>
 
       <section className={styles.metricsGrid}>
         <MetricCard
           title="Доход"
           value={`${Math.round(analytics.data?.totals?.income ?? 0).toLocaleString('ru-RU')} ₽`}
-          subtitle="Синхронизировано за месяц"
+          subtitle="Синхронизировано за период"
           accent="green"
         />
         <MetricCard
