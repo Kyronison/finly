@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { GetServerSideProps } from 'next';
 import jwt from 'jsonwebtoken';
-import { format, subMonths } from 'date-fns';
+import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import useSWR from 'swr';
 import { useRouter } from 'next/router';
@@ -79,7 +79,7 @@ export default function Dashboard({ user }: DashboardProps) {
   const categories = useSWR<{ categories: Category[] }>(categoriesKey);
   const expenses = useSWR<{
     expenses: ExpenseItem[];
-    daily: Array<{ date: string; income: number; expenses: number }>;
+    monthly: Array<{ date: string; income: number; expenses: number }>;
     totals: { income: number; expenses: number };
   }>(
     expensesKey,
@@ -95,16 +95,16 @@ export default function Dashboard({ user }: DashboardProps) {
     [categories.data],
   );
 
-  const monthOptions = useMemo(() => {
-    return Array.from({ length: 6 }).map((_, index) => {
-      const date = subMonths(new Date(), index);
-      const formatted = format(date, 'LLLL yyyy', { locale: ru });
-      return {
-        value: format(date, 'yyyy-MM'),
-        label: formatted.charAt(0).toUpperCase() + formatted.slice(1),
-      };
-    });
-  }, []);
+  const selectedMonthLabel = useMemo(() => {
+    try {
+      const parsed = new Date(`${selectedMonth}-01T00:00:00`);
+      if (Number.isNaN(parsed.getTime())) return '';
+      const formatted = format(parsed, 'LLLL yyyy', { locale: ru });
+      return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    } catch (error) {
+      return '';
+    }
+  }, [selectedMonth]);
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -122,22 +122,17 @@ export default function Dashboard({ user }: DashboardProps) {
       <div className={styles.headerRow}>
         <div>
           <h1>Финансовый отчёт</h1>
-          <p>Месяц: {monthOptions.find((option) => option.value === selectedMonth)?.label}</p>
+          <p>Месяц: {selectedMonthLabel}</p>
         </div>
-        <select
+        <input
+          type="month"
           className={styles.monthPicker}
           value={selectedMonth}
           onChange={(event) => {
             const value = event.target.value;
             setSelectedMonth(value);
           }}
-        >
-          {monthOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        />
       </div>
 
       <section className={styles.metricsGrid}>
@@ -162,7 +157,7 @@ export default function Dashboard({ user }: DashboardProps) {
       </section>
 
       <section className={styles.gridSingle}>
-        <SpendingChart data={expenses.data?.daily ?? []} />
+        <SpendingChart data={expenses.data?.monthly ?? []} />
       </section>
 
       <section className={styles.gridSingle}>

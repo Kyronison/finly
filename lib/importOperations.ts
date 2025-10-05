@@ -84,84 +84,102 @@ export async function importOperations({
     return { created: 0, categoriesCreated: 0, skipped, nothingToImport: true };
   }
 
-  const existingCategories = await prisma.category.findMany({
-    where: {
-      userId,
-      type: categoryType,
-    },
-  });
-
-  const categoryMap = new Map<string, { id: string }>();
-  existingCategories.forEach((category) => {
-    categoryMap.set(normalizeCategoryName(category.name).toLowerCase(), { id: category.id });
-  });
-
-  const categoriesToCreate: string[] = [];
-  const categoriesToCreateKeys = new Set<string>();
-  prepared.forEach((item) => {
-    if (!item.categoryName) return;
-    const key = normalizeCategoryName(item.categoryName).toLowerCase();
-    if (!categoryMap.has(key) && !categoriesToCreateKeys.has(key)) {
-      categoriesToCreate.push(item.categoryName);
-      categoriesToCreateKeys.add(key);
-    }
-  });
-
-  const createdCategories: string[] = [];
-
-  for (let i = 0; i < categoriesToCreate.length; i += 1) {
-    const name = categoriesToCreate[i];
-    const category = await prisma.category.create({
-      data: {
-        name,
-        type: categoryType,
+  const result = await prisma.$transaction(async (tx) => {
+    const existingCategories = await tx.category.findMany({
+      where: {
         userId,
-        color: pickColor(i + existingCategories.length),
+        type: categoryType,
       },
     });
-    categoryMap.set(normalizeCategoryName(name).toLowerCase(), { id: category.id });
-    createdCategories.push(category.id);
-  }
 
-  let createdOperations = 0;
+    const categoryMap = new Map<string, { id: string }>();
+    existingCategories.forEach((category) => {
+      categoryMap.set(normalizeCategoryName(category.name).toLowerCase(), { id: category.id });
+    });
 
-  for (const item of prepared) {
-    let categoryId: string | null = null;
-    if (item.categoryName) {
+    const categoriesToCreate: string[] = [];
+    const categoriesToCreateKeys = new Set<string>();
+    prepared.forEach((item) => {
+      if (!item.categoryName) return;
       const key = normalizeCategoryName(item.categoryName).toLowerCase();
-      const category = categoryMap.get(key);
-      if (!category) {
-        const created = await prisma.category.create({
-          data: {
-            name: item.categoryName,
-            type: categoryType,
-            userId,
-            color: pickColor(createdCategories.length + existingCategories.length),
-          },
-        });
-        categoryMap.set(key, { id: created.id });
-        createdCategories.push(created.id);
-        categoryId = created.id;
-      } else {
-        categoryId = category.id;
+      if (!categoryMap.has(key) && !categoriesToCreateKeys.has(key)) {
+        categoriesToCreate.push(item.categoryName);
+        categoriesToCreateKeys.add(key);
       }
+    });
+
+    let createdCategoriesCount = 0;
+    let nextColorIndex = existingCategories.length;
+
+    for (let i = 0; i < categoriesToCreate.length; i += 1) {
+      const name = categoriesToCreate[i];
+      const category = await tx.category.create({
+        data: {
+          name,
+          type: categoryType,
+          userId,
+          color: pickColor(nextColorIndex),
+        },
+      });
+      nextColorIndex += 1;
+      createdCategoriesCount += 1;
+      categoryMap.set(normalizeCategoryName(name).toLowerCase(), { id: category.id });
     }
 
-    await prisma.expense.create({
-      data: {
+    const operationsToCreate: Array<{
+      amount: number;
+      categoryId: string | null;
+      description: string | null;
+      date: Date;
+      userId: string;
+    }> = [];
+
+    for (const item of prepared) {
+      let categoryId: string | null = null;
+      if (item.categoryName) {
+        const key = normalizeCategoryName(item.categoryName).toLowerCase();
+        const category = categoryMap.get(key);
+        if (!category) {
+          const created = await tx.category.create({
+            data: {
+              name: item.categoryName,
+              type: categoryType,
+              userId,
+              color: pickColor(nextColorIndex),
+            },
+          });
+          nextColorIndex += 1;
+          createdCategoriesCount += 1;
+          categoryMap.set(key, { id: created.id });
+          categoryId = created.id;
+        } else {
+          categoryId = category.id;
+        }
+      }
+
+      operationsToCreate.push({
         amount: item.amount,
         categoryId,
         description: item.description,
         date: item.date,
         userId,
-      },
-    });
-    createdOperations += 1;
-  }
+      });
+    }
+
+    if (operationsToCreate.length === 0) {
+      return { created: 0, categoriesCreated: createdCategoriesCount };
+    }
+
+    const createdOperations = await tx.expense.createMany({ data: operationsToCreate });
+
+    return {
+      created: createdOperations.count,
+      categoriesCreated: createdCategoriesCount,
+    };
+  });
 
   return {
-    created: createdOperations,
-    categoriesCreated: createdCategories.length,
+    ...result,
     skipped,
   };
 }
