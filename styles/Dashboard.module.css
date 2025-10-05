@@ -15,7 +15,22 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
-.monthPicker {
+.periodPickerGroup {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.periodPicker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.periodPicker input[type='month'] {
   background: rgba(255, 255, 255, 0.08);
   border-radius: 12px;
   border: none;
@@ -24,11 +39,8 @@
   font-weight: 600;
 }
 
-.periodPickerGroup {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.periodPicker input[type='month']::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
 
 .metricsGrid {
