@@ -1,3 +1,5 @@
+import { format } from 'date-fns';
+import { ru } from 'date-fns/locale';
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 import styles from './SpendingChart.module.css';
@@ -13,16 +15,24 @@ interface Props {
 }
 
 export function SpendingChart({ data }: Props) {
-  const formatted = data
-    .map((point) => ({ ...point, label: new Date(point.date).getDate() }))
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const formatted = [...data]
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+    .map((point) => {
+      const parsed = new Date(point.date);
+      const label = format(parsed, 'LLLL yyyy', { locale: ru });
+      const formattedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+      return {
+        ...point,
+        label: formattedLabel,
+      };
+    });
 
   return (
     <div className={styles.container}>
       <header className={styles.header}>
         <div>
           <h3>Ритм доходов и расходов</h3>
-          <p>Сравните ежедневные поступления и траты выбранного месяца</p>
+          <p>Сравните помесячные поступления и траты за выбранный период</p>
         </div>
       </header>
       <div className={styles.chartWrapper}>
@@ -51,7 +61,7 @@ export function SpendingChart({ data }: Props) {
                 const title = name === 'expenses' ? 'Расходы' : 'Доходы';
                 return [`${value.toLocaleString('ru-RU')} ₽`, title];
               }}
-              labelFormatter={(label) => `День ${label}`}
+              labelFormatter={(label) => label}
             />
             <Legend
               wrapperStyle={{ paddingTop: 12 }}

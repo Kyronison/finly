@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { GetServerSideProps } from 'next';
 import jwt from 'jsonwebtoken';
-import { format, subMonths } from 'date-fns';
+import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import useSWR from 'swr';
 import { useRouter } from 'next/router';
@@ -69,17 +69,26 @@ interface AnalyticsResponse {
 
 export default function Dashboard({ user }: DashboardProps) {
   const router = useRouter();
-  const [selectedMonth, setSelectedMonth] = useState(format(new Date(), 'yyyy-MM'));
+  const defaultMonth = format(new Date(), 'yyyy-MM');
+  const [startMonth, setStartMonth] = useState(defaultMonth);
+  const [endMonth, setEndMonth] = useState(defaultMonth);
 
-  const analyticsKey = `/api/analytics/overview?month=${selectedMonth}`;
-  const categoriesKey = `/api/categories?month=${selectedMonth}`;
-  const expensesKey = `/api/expenses?month=${selectedMonth}`;
+  const periodQuery = useMemo(() => {
+    const params = new URLSearchParams();
+    params.set('start', startMonth);
+    params.set('end', endMonth);
+    return params.toString();
+  }, [startMonth, endMonth]);
+
+  const analyticsKey = `/api/analytics/overview?${periodQuery}`;
+  const categoriesKey = `/api/categories?${periodQuery}`;
+  const expensesKey = `/api/expenses?${periodQuery}`;
 
   const analytics = useSWR<AnalyticsResponse>(analyticsKey);
   const categories = useSWR<{ categories: Category[] }>(categoriesKey);
   const expenses = useSWR<{
     expenses: ExpenseItem[];
-    daily: Array<{ date: string; income: number; expenses: number }>;
+    monthly: Array<{ date: string; income: number; expenses: number }>;
     totals: { income: number; expenses: number };
   }>(
     expensesKey,
@@ -95,16 +104,26 @@ export default function Dashboard({ user }: DashboardProps) {
     [categories.data],
   );
 
-  const monthOptions = useMemo(() => {
-    return Array.from({ length: 6 }).map((_, index) => {
-      const date = subMonths(new Date(), index);
-      const formatted = format(date, 'LLLL yyyy', { locale: ru });
-      return {
-        value: format(date, 'yyyy-MM'),
-        label: formatted.charAt(0).toUpperCase() + formatted.slice(1),
-      };
-    });
-  }, []);
+  const selectedPeriodLabel = useMemo(() => {
+    try {
+      const startParsed = new Date(`${startMonth}-01T00:00:00`);
+      const endParsed = new Date(`${endMonth}-01T00:00:00`);
+      if (Number.isNaN(startParsed.getTime()) || Number.isNaN(endParsed.getTime())) return '';
+
+      const startFormatted = format(startParsed, 'LLLL yyyy', { locale: ru });
+      const endFormatted = format(endParsed, 'LLLL yyyy', { locale: ru });
+      const startLabel = startFormatted.charAt(0).toUpperCase() + startFormatted.slice(1);
+      const endLabel = endFormatted.charAt(0).toUpperCase() + endFormatted.slice(1);
+
+      if (startMonth === endMonth) {
+        return startLabel;
+      }
+
+      return `${startLabel} — ${endLabel}`;
+    } catch (error) {
+      return '';
+    }
+  }, [endMonth, startMonth]);
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -122,22 +141,38 @@ export default function Dashboard({ user }: DashboardProps) {
       <div className={styles.headerRow}>
         <div>
           <h1>Финансовый отчёт</h1>
-          <p>Месяц: {monthOptions.find((option) => option.value === selectedMonth)?.label}</p>
+          <p>Период: {selectedPeriodLabel}</p>
         </div>
-        <select
-          className={styles.monthPicker}
-          value={selectedMonth}
-          onChange={(event) => {
-            const value = event.target.value;
-            setSelectedMonth(value);
-          }}
-        >
-          {monthOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
+        <div className={styles.periodPickerGroup}>
+          <input
+            type="month"
+            className={styles.monthPicker}
+            value={startMonth}
+            aria-label="Начало периода"
+            onChange={(event) => {
+              const value = event.target.value;
+              if (!value) return;
+              setStartMonth(value);
+              if (value > endMonth) {
+                setEndMonth(value);
+              }
+            }}
+          />
+          <input
+            type="month"
+            className={styles.monthPicker}
+            value={endMonth}
+            aria-label="Конец периода"
+            onChange={(event) => {
+              const value = event.target.value;
+              if (!value) return;
+              setEndMonth(value);
+              if (value < startMonth) {
+                setStartMonth(value);
+              }
+            }}
+          />
+        </div>
       </div>
 
       <section className={styles.metricsGrid}>
@@ -162,7 +197,7 @@ export default function Dashboard({ user }: DashboardProps) {
       </section>
 
       <section className={styles.gridSingle}>
-        <SpendingChart data={expenses.data?.daily ?? []} />
+        <SpendingChart data={expenses.data?.monthly ?? []} />
       </section>
 
       <section className={styles.gridSingle}>

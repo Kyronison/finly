@@ -24,6 +24,13 @@
   font-weight: 600;
 }
 
+.periodPickerGroup {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .metricsGrid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -49,5 +56,10 @@
   .headerRow {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .periodPickerGroup {
+    width: 100%;
+    justify-content: flex-start;
   }
 }

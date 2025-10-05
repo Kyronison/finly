@@ -1,22 +1,39 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { endOfMonth, formatISO, parseISO, startOfMonth } from 'date-fns';
+import { addMonths, endOfMonth, format, formatISO, parseISO, startOfMonth } from 'date-fns';
 
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 
-function resolveMonthRange(month?: string) {
-  if (!month) {
-    const now = new Date();
-    return { start: startOfMonth(now), end: endOfMonth(now) };
-  }
+function parseBoundary(value?: string) {
+  if (!value) return null;
 
-  const parsed = parseISO(`${month}-01`);
+  const normalized = value.length === 7 ? `${value}-01` : value;
+  const parsed = parseISO(normalized);
   if (Number.isNaN(parsed.getTime())) {
-    const now = new Date();
-    return { start: startOfMonth(now), end: endOfMonth(now) };
+    return null;
   }
 
-  return { start: startOfMonth(parsed), end: endOfMonth(parsed) };
+  return parsed;
+}
+
+function resolvePeriod(startRaw?: string, endRaw?: string) {
+  const now = new Date();
+  const fallbackStart = startOfMonth(now);
+  const fallbackEnd = endOfMonth(now);
+
+  const parsedStart = parseBoundary(startRaw);
+  const parsedEnd = parseBoundary(endRaw);
+
+  let start = startOfMonth(parsedStart ?? fallbackStart);
+  let end = endOfMonth(parsedEnd ?? fallbackEnd);
+
+  if (start.getTime() > end.getTime()) {
+    const tmp = start;
+    start = startOfMonth(end);
+    end = endOfMonth(tmp);
+  }
+
+  return { start, end };
 }
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -36,10 +53,12 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  const { month } = req.query;
-  const { start, end } = resolveMonthRange(typeof month === 'string' ? month : undefined);
+  const { start, end } = resolvePeriod(
+    typeof req.query.start === 'string' ? req.query.start : undefined,
+    typeof req.query.end === 'string' ? req.query.end : undefined,
+  );
 
-  const expenses = await prisma.expense.findMany({
+  const operations = await prisma.expense.findMany({
     where: {
       userId,
       date: { gte: start, lte: end },
@@ -53,33 +72,67 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     expenses: 0,
   };
 
-  const daily = new Map<string, { income: number; expenses: number }>();
-
-  expenses.forEach((expense) => {
-    const amount = Number(expense.amount);
-    const key = formatISO(expense.date, { representation: 'date' });
-    const bucket = daily.get(key) ?? { income: 0, expenses: 0 };
-
+  operations.forEach((expense) => {
     if (expense.category?.type === 'INCOME') {
-      totals.income += amount;
+      totals.income += Number(expense.amount);
+    } else {
+      totals.expenses += Number(expense.amount);
+    }
+  });
+
+  const monthlyTotals = new Map<
+    string,
+    {
+      date: Date;
+      income: number;
+      expenses: number;
+    }
+  >();
+
+  operations.forEach((operation) => {
+    const monthKey = format(operation.date, 'yyyy-MM');
+    const bucket =
+      monthlyTotals.get(monthKey) ?? {
+        date: startOfMonth(operation.date),
+        income: 0,
+        expenses: 0,
+      };
+
+    const amount = Number(operation.amount);
+    if (operation.category?.type === 'INCOME') {
       bucket.income += amount;
     } else {
-      totals.expenses += amount;
       bucket.expenses += amount;
     }
 
-    daily.set(key, bucket);
+    monthlyTotals.set(monthKey, bucket);
   });
 
+  const timelineStart = startOfMonth(start);
+  const timelineEnd = endOfMonth(end);
+  const monthly: Array<{ date: string; income: number; expenses: number }> = [];
+
+  for (
+    let cursor = timelineStart;
+    cursor.getTime() <= timelineEnd.getTime();
+    cursor = addMonths(cursor, 1)
+  ) {
+    const monthKey = format(cursor, 'yyyy-MM');
+    const bucket = monthlyTotals.get(monthKey);
+    monthly.push({
+      date: formatISO(startOfMonth(cursor), { representation: 'date' }),
+      income: bucket?.income ?? 0,
+      expenses: bucket?.expenses ?? 0,
+    });
+  }
+
   return res.status(200).json({
-    expenses: expenses.map((item) => ({
+    expenses: operations.map((item) => ({
       ...item,
       amount: Number(item.amount),
     })),
     totals,
-    daily: Array.from(daily.entries())
-      .map(([date, value]) => ({ date, income: value.income, expenses: value.expenses }))
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    monthly,
   });
 }
 
