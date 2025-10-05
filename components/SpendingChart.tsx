@@ -1,6 +1,16 @@
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
-import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import {
+  Area,
+  AreaChart,
+  Brush,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 
 import styles from './SpendingChart.module.css';
 
@@ -15,16 +25,26 @@ interface Props {
 }
 
 export function SpendingChart({ data }: Props) {
-  const formatted = [...data]
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-    .map((point) => {
-      const parsed = new Date(point.date);
-      const label = format(parsed, 'd MMMM yyyy', { locale: ru });
-      return {
-        ...point,
-        label: label.charAt(0).toUpperCase() + label.slice(1),
-      };
-    });
+  const sorted = [...data].sort(
+    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+  );
+
+  const firstMeaningfulIndex = sorted.findIndex(
+    (point) => point.income !== 0 || point.expenses !== 0,
+  );
+
+  const prepared =
+    firstMeaningfulIndex > 0 ? sorted.slice(firstMeaningfulIndex) : sorted;
+
+  const formatted = prepared.map((point) => {
+    const parsed = new Date(point.date);
+    const labelRaw = format(parsed, 'LLLL yyyy', { locale: ru });
+    const label = labelRaw.charAt(0).toUpperCase() + labelRaw.slice(1);
+    return {
+      ...point,
+      label,
+    };
+  });
 
   return (
     <div className={styles.container}>
@@ -48,8 +68,21 @@ export function SpendingChart({ data }: Props) {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-            <XAxis dataKey="label" stroke="rgba(255,255,255,0.5)" tickLine={false} axisLine={false} />
+            <XAxis
+              dataKey="label"
+              stroke="rgba(255,255,255,0.5)"
+              tickLine={false}
+              axisLine={false}
+              minTickGap={16}
+            />
             <YAxis stroke="rgba(255,255,255,0.5)" tickLine={false} axisLine={false} width={60} />
+            <Brush
+              dataKey="label"
+              height={28}
+              stroke="rgba(255, 255, 255, 0.3)"
+              travellerWidth={10}
+              fill="rgba(255, 255, 255, 0.04)"
+            />
             <Tooltip
               contentStyle={{
                 background: 'rgba(10, 8, 18, 0.95)',
