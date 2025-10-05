@@ -40,35 +40,45 @@ async function getCategories(req: NextApiRequest, res: NextApiResponse) {
   const { month } = req.query;
   const { start, end } = resolveMonthRange(typeof month === 'string' ? month : undefined);
 
-  const [categories, grouped] = await Promise.all([
+  const [categories, operations] = await Promise.all([
     prisma.category.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' },
     }),
-    prisma.expense.groupBy({
-      by: ['categoryId'],
+    prisma.expense.findMany({
       where: {
         userId,
-        categoryId: { not: null },
         date: { gte: start, lte: end },
+        categoryId: { not: null },
       },
-      _sum: { amount: true },
+      include: { category: true },
     }),
   ]);
 
-  const spentMap = new Map<string, number>();
-  grouped.forEach((item) => {
-    if (!item.categoryId || !item._sum.amount) return;
-    spentMap.set(item.categoryId, Number(item._sum.amount));
+  const totalsByCategory = new Map<string, { income: number; expenses: number }>();
+  operations.forEach((operation) => {
+    if (!operation.categoryId || !operation.category) return;
+    const amount = Number(operation.amount);
+    const bucket = totalsByCategory.get(operation.categoryId) ?? { income: 0, expenses: 0 };
+    if (operation.category.type === CategoryType.INCOME) {
+      bucket.income += amount;
+    } else {
+      bucket.expenses += amount;
+    }
+    totalsByCategory.set(operation.categoryId, bucket);
   });
 
   const enriched = categories.map((category) => {
-    const spent = spentMap.get(category.id) ?? 0;
+    const bucket = totalsByCategory.get(category.id) ?? { income: 0, expenses: 0 };
+    const spent = bucket.expenses;
+    const earned = bucket.income;
     const budget = category.budget ?? undefined;
-    const progress = budget ? Math.min(1, spent / budget) : null;
+    const progress =
+      category.type === CategoryType.EXPENSE && budget ? Math.min(1, spent / budget) : null;
     return {
       ...category,
       spent,
+      earned,
       progress,
     };
   });

@@ -53,18 +53,22 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     expenses: 0,
   };
 
-  const daily = new Map<string, number>();
+  const daily = new Map<string, { income: number; expenses: number }>();
 
   expenses.forEach((expense) => {
     const amount = Number(expense.amount);
+    const key = formatISO(expense.date, { representation: 'date' });
+    const bucket = daily.get(key) ?? { income: 0, expenses: 0 };
+
     if (expense.category?.type === 'INCOME') {
       totals.income += amount;
+      bucket.income += amount;
     } else {
       totals.expenses += amount;
+      bucket.expenses += amount;
     }
 
-    const key = formatISO(expense.date, { representation: 'date' });
-    daily.set(key, (daily.get(key) ?? 0) + amount);
+    daily.set(key, bucket);
   });
 
   return res.status(200).json({
@@ -73,7 +77,9 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
       amount: Number(item.amount),
     })),
     totals,
-    daily: Array.from(daily.entries()).map(([date, value]) => ({ date, value })),
+    daily: Array.from(daily.entries())
+      .map(([date, value]) => ({ date, income: value.income, expenses: value.expenses }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
   });
 }
 
