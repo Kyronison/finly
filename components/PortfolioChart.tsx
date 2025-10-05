@@ -20,9 +20,21 @@ interface Props {
   series: Series[];
 }
 
+type Timeframe = '1D' | '1W' | '1M' | '6M' | '1Y' | 'ALL';
+
+const timeframeOptions: Array<{ value: Timeframe; label: string; days?: number }> = [
+  { value: '1D', label: 'День', days: 1 },
+  { value: '1W', label: 'Неделя', days: 7 },
+  { value: '1M', label: 'Месяц', days: 30 },
+  { value: '6M', label: '6 месяцев', days: 182 },
+  { value: '1Y', label: 'Год', days: 365 },
+  { value: 'ALL', label: 'Все время' },
+];
+
 export function PortfolioChart({ series }: Props) {
   const hasData = series.some((item) => item.points.length > 0);
   const [selectedCurrency, setSelectedCurrency] = useState(series[0]?.currency ?? 'RUB');
+  const [timeframe, setTimeframe] = useState<Timeframe>('ALL');
 
   const activeSeries = useMemo(() => {
     if (!series.length) return undefined;
@@ -33,7 +45,48 @@ export function PortfolioChart({ series }: Props) {
     return { ...match, points };
   }, [series, selectedCurrency]);
 
-  const latestPoint = activeSeries?.points[activeSeries.points.length - 1];
+  const filteredPoints = useMemo(() => {
+    if (!activeSeries) return [];
+    if (timeframe === 'ALL') return activeSeries.points;
+
+    const daysLimit = timeframeOptions.find((option) => option.value === timeframe)?.days;
+    if (!daysLimit) return activeSeries.points;
+
+    const latestDate = new Date(activeSeries.points[activeSeries.points.length - 1]?.date ?? Date.now());
+    const earliestAllowed = new Date(latestDate);
+    earliestAllowed.setDate(latestDate.getDate() - (daysLimit - 1));
+
+    const sliced = activeSeries.points.filter((point) => new Date(point.date) >= earliestAllowed);
+    if (sliced.length === 0) {
+      return activeSeries.points.slice(-1);
+    }
+
+    return sliced;
+  }, [activeSeries, timeframe]);
+
+  const latestPoint = filteredPoints[filteredPoints.length - 1];
+
+  const { minValue, maxValue } = useMemo(() => {
+    if (!filteredPoints.length) {
+      return { minValue: 0, maxValue: 0 };
+    }
+
+    const values = filteredPoints.map((point) => point.value);
+    return { minValue: Math.min(...values), maxValue: Math.max(...values) };
+  }, [filteredPoints]);
+
+  const yAxisDomain = useMemo(() => {
+    if (!filteredPoints.length) return ['auto', 'auto'] as const;
+
+    const range = maxValue - minValue;
+    if (range === 0) {
+      const padding = Math.max(maxValue * 0.05, 1);
+      return [minValue - padding, maxValue + padding] as const;
+    }
+
+    const padding = range * 0.1;
+    return [minValue - padding, maxValue + padding] as const;
+  }, [filteredPoints, maxValue, minValue]);
 
   return (
     <div className={styles.container}>
@@ -57,6 +110,22 @@ export function PortfolioChart({ series }: Props) {
                 ))}
               </select>
             )}
+            <div className={styles.timeframeGroup}>
+              {timeframeOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={
+                    option.value === timeframe
+                      ? `${styles.timeframeButton} ${styles.timeframeButtonActive}`
+                      : styles.timeframeButton
+                  }
+                  onClick={() => setTimeframe(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             {latestPoint ? (
               <div className={styles.metric}>
                 <span className={styles.metricLabel}>Текущая стоимость</span>
@@ -73,7 +142,7 @@ export function PortfolioChart({ series }: Props) {
       <div className={styles.chartWrapper}>
         {hasData && activeSeries ? (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={activeSeries.points}>
+            <AreaChart data={filteredPoints}>
               <defs>
                 <linearGradient id={`portfolio-${activeSeries.currency}`} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.8} />
@@ -96,6 +165,7 @@ export function PortfolioChart({ series }: Props) {
                 axisLine={false}
                 tickFormatter={(value: number) => value.toLocaleString('ru-RU')}
                 width={90}
+                domain={yAxisDomain}
               />
               <Tooltip
                 contentStyle={{
@@ -117,6 +187,7 @@ export function PortfolioChart({ series }: Props) {
                 stroke="#38bdf8"
                 strokeWidth={2}
                 fill={`url(#portfolio-${activeSeries.currency})`}
+                baseValue="dataMin"
               />
             </AreaChart>
           </ResponsiveContainer>
