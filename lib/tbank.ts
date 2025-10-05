@@ -186,6 +186,7 @@ type NormalizedOperation = {
   description: string | null;
   state: string;
   commission: number | null;
+  hasTradeQuantity: boolean;
 };
 
 type InstrumentMeta = {
@@ -312,11 +313,62 @@ function normalizeOperation(operation: ApiOperation): NormalizedOperation | null
   const state = operation.state ?? 'OPERATION_STATE_UNSPECIFIED';
   const rawOperationType = operation.operationType ?? null;
   const payment = moneyValueToNumber(operation.payment);
-  const price = moneyValueToNumber(operation.price);
+  const initialPrice = moneyValueToNumber(operation.price);
   const quantity = parseNumber(operation.quantity);
   const quantityRest = parseNumber(operation.quantityRest);
   const executedQuantity = quantity != null ? quantity - (quantityRest ?? 0) : null;
   const commission = moneyValueToNumber(operation.commission);
+
+  let normalizedPrice = initialPrice;
+  let normalizedQuantity =
+    executedQuantity != null && Number.isFinite(executedQuantity)
+      ? executedQuantity
+      : quantity;
+
+  if (normalizedQuantity != null && !Number.isFinite(normalizedQuantity)) {
+    normalizedQuantity = null;
+  }
+
+  let hasTradeQuantity = false;
+  const tradeSummaries = ensureArray(operation.trades)
+    .map((trade) => ({
+      price: moneyValueToNumber(trade?.price),
+      quantity: parseNumber(trade?.quantity),
+    }))
+    .filter((trade) =>
+      typeof trade.price === 'number' &&
+      Number.isFinite(trade.price) &&
+      typeof trade.quantity === 'number' &&
+      Number.isFinite(trade.quantity),
+    );
+
+  if (tradeSummaries.length > 0) {
+    let totalQuantity = 0;
+    let totalValue = 0;
+    tradeSummaries.forEach((trade) => {
+      totalQuantity += trade.quantity ?? 0;
+      totalValue += (trade.price ?? 0) * (trade.quantity ?? 0);
+    });
+
+    if (Number.isFinite(totalQuantity) && Math.abs(totalQuantity) > 0) {
+      normalizedQuantity = totalQuantity;
+      hasTradeQuantity = true;
+      if (Number.isFinite(totalValue)) {
+        const average = totalValue / totalQuantity;
+        if (Number.isFinite(average)) {
+          normalizedPrice = average;
+        }
+      }
+    }
+  }
+
+  if (normalizedQuantity != null && Math.abs(normalizedQuantity) === 0) {
+    normalizedQuantity = 0;
+  }
+
+  if (normalizedPrice != null && !Number.isFinite(normalizedPrice)) {
+    normalizedPrice = null;
+  }
 
   return {
     id: operation.id,
@@ -326,13 +378,14 @@ function normalizeOperation(operation: ApiOperation): NormalizedOperation | null
       humanizeOperationType(rawOperationType) ?? operation.type ?? humanizeOperationType(state) ?? 'Operation',
     rawOperationType,
     payment,
-    price,
-    quantity: executedQuantity ?? quantity ?? null,
+    price: normalizedPrice,
+    quantity: normalizedQuantity,
     currency: operation.currency ?? operation.payment?.currency ?? null,
     date: operation.date,
     description: operation.description ?? operation.type ?? humanizeOperationType(rawOperationType),
     state,
     commission,
+    hasTradeQuantity,
   };
 }
 
@@ -370,11 +423,15 @@ async function buildPortfolioSnapshots(
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
 
+  const isMeaningfulQuantity = (value: number | null | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) && Math.abs(value) > 1e-6;
+
   const tradeFigis = new Set<string>();
   sortedOperations.forEach((operation) => {
     if (!operation.figi) return;
-    if (typeof operation.quantity !== 'number' || Number.isNaN(operation.quantity)) return;
-    if (operation.quantity === 0) return;
+    if (!isMeaningfulQuantity(operation.quantity) && !operation.hasTradeQuantity) {
+      return;
+    }
     tradeFigis.add(operation.figi);
   });
 
@@ -421,22 +478,21 @@ async function buildPortfolioSnapshots(
         cashByCurrency.set(currency, (cashByCurrency.get(currency) ?? 0) - operation.commission);
       }
 
-      if (
-        operation.figi &&
-        typeof operation.quantity === 'number' &&
-        Number.isFinite(operation.quantity) &&
-        operation.quantity !== 0
-      ) {
+      const normalizedQuantity = isMeaningfulQuantity(operation.quantity)
+        ? (operation.quantity as number)
+        : null;
+
+      if (operation.figi && normalizedQuantity != null) {
         const rawType = (operation.rawOperationType ?? '').toUpperCase();
         let quantityChange = 0;
         if (rawType.includes('SELL')) {
-          quantityChange = -operation.quantity;
+          quantityChange = -normalizedQuantity;
         } else if (rawType.includes('BUY')) {
-          quantityChange = operation.quantity;
+          quantityChange = normalizedQuantity;
         } else if (typeof operation.payment === 'number' && Number.isFinite(operation.payment)) {
-          quantityChange = operation.payment > 0 ? -operation.quantity : operation.quantity;
+          quantityChange = operation.payment > 0 ? -normalizedQuantity : normalizedQuantity;
         } else {
-          quantityChange = operation.quantity;
+          quantityChange = normalizedQuantity;
         }
 
         const position = positions.get(operation.figi) ?? { quantity: 0, currency: operation.currency ?? null };
@@ -450,9 +506,9 @@ async function buildPortfolioSnapshots(
           typeof operation.price === 'number' && Number.isFinite(operation.price)
             ? operation.price
             : typeof operation.payment === 'number' &&
-              Number.isFinite(operation.payment) &&
-              operation.quantity !== 0
-              ? Math.abs(operation.payment) / Math.abs(operation.quantity)
+                Number.isFinite(operation.payment) &&
+                normalizedQuantity !== 0
+              ? Math.abs(operation.payment) / Math.abs(normalizedQuantity)
               : null;
 
         if (tradePrice != null && Number.isFinite(tradePrice)) {
