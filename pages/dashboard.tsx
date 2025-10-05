@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { GetServerSideProps } from 'next';
 import jwt from 'jsonwebtoken';
 import { format, subMonths } from 'date-fns';
@@ -85,6 +85,11 @@ export default function Dashboard({ user }: DashboardProps) {
     [categories.data],
   );
 
+  const incomeCategories = useMemo(
+    () => (categories.data?.categories ?? []).filter((category) => category.type === 'INCOME'),
+    [categories.data],
+  );
+
   const monthOptions = useMemo(() => {
     return Array.from({ length: 6 }).map((_, index) => {
       const date = subMonths(new Date(), index);
@@ -100,6 +105,12 @@ export default function Dashboard({ user }: DashboardProps) {
     await fetch('/api/auth/logout', { method: 'POST' });
     router.replace('/');
   }
+
+  const handleOperationsChanged = useCallback(() => {
+    expenses.mutate();
+    analytics.mutate();
+    categories.mutate();
+  }, [analytics, categories, expenses]);
 
   return (
     <DashboardLayout user={user} onLogout={handleLogout}>
@@ -159,16 +170,21 @@ export default function Dashboard({ user }: DashboardProps) {
         <CategoryList categories={categories.data?.categories ?? []} onChanged={() => categories.mutate()} />
       </section>
 
+      <section className={styles.gridTwoColumn}>
+        <ExpenseForm categories={expenseCategories} onCreated={handleOperationsChanged} />
+        <ExpenseForm
+          mode="INCOME"
+          categories={incomeCategories}
+          allowUncategorized={false}
+          onCreated={handleOperationsChanged}
+        />
+      </section>
+
       <section className={styles.gridSingle}>
-        <ExpenseForm categories={expenseCategories} onCreated={() => expenses.mutate()} />
         <ExpenseTable
           expenses={expenses.data?.expenses ?? []}
           categories={categories.data?.categories ?? []}
-          onChanged={() => {
-            expenses.mutate();
-            analytics.mutate();
-            categories.mutate();
-          }}
+          onChanged={handleOperationsChanged}
         />
       </section>
     </DashboardLayout>
