@@ -76,7 +76,11 @@ export default function Dashboard({ user }: DashboardProps) {
 
   const analytics = useSWR<AnalyticsResponse>(analyticsKey);
   const categories = useSWR<{ categories: Category[] }>(categoriesKey);
-  const expenses = useSWR<{ expenses: ExpenseItem[]; daily: Array<{ date: string; value: number }>; totals: { income: number; expenses: number } }>(
+  const expenses = useSWR<{
+    expenses: ExpenseItem[];
+    daily: Array<{ date: string; income: number; expenses: number }>;
+    totals: { income: number; expenses: number };
+  }>(
     expensesKey,
   );
 
@@ -156,8 +160,11 @@ export default function Dashboard({ user }: DashboardProps) {
         />
       </section>
 
-      <section className={styles.gridTwoColumn}>
+      <section className={styles.gridSingle}>
         <SpendingChart data={expenses.data?.daily ?? []} />
+      </section>
+
+      <section className={styles.gridSingle}>
         <BreakdownList items={analytics.data?.breakdown ?? []} />
       </section>
 
