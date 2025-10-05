@@ -139,12 +139,14 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
   }
 
   return res.status(200).json({
-    expenses: operations.map((item) => ({
+    expenses: expenses.map((item) => ({
       ...item,
       amount: Number(item.amount),
     })),
     totals,
     monthly,
+    periodStart: formatISO(start, { representation: 'date' }),
+    periodEnd: formatISO(end, { representation: 'date' }),
   });
 }
 
