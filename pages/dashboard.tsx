@@ -106,14 +106,14 @@ export default function Dashboard({ user }: DashboardProps) {
 
   const selectedMonthLabel = useMemo(() => {
     try {
-      const parsed = new Date(`${selectedMonth}-01T00:00:00`);
+      const parsed = new Date(`${startMonth}-01T00:00:00`);
       if (Number.isNaN(parsed.getTime())) return '';
       const formatted = format(parsed, 'LLLL yyyy', { locale: ru });
       return formatted.charAt(0).toUpperCase() + formatted.slice(1);
     } catch (error) {
       return '';
     }
-  }, [selectedMonth]);
+  }, [startMonth]);
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -136,10 +136,11 @@ export default function Dashboard({ user }: DashboardProps) {
         <input
           type="month"
           className={styles.monthPicker}
-          value={selectedMonth}
+          value={startMonth}
           onChange={(event) => {
             const value = event.target.value;
-            setSelectedMonth(value);
+            setStartMonth(value);
+            setEndMonth(value);
           }}
         />
       </div>
