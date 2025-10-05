@@ -27,31 +27,6 @@
   color: rgba(255, 255, 255, 0.6);
 }
 
-.modeToggle {
-  display: inline-flex;
-  gap: 12px;
-  background: rgba(10, 9, 15, 0.9);
-  border-radius: 999px;
-  padding: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  align-self: flex-start;
-}
-
-.modeOption {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 13px;
-  color: rgba(255, 255, 255, 0.75);
-  cursor: pointer;
-}
-
-.modeOption input {
-  accent-color: #22d3ee;
-}
-
 .actions {
   display: flex;
   gap: 12px;

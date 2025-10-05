@@ -10,7 +10,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { MetricCard } from '@/components/MetricCard';
 import { SpendingChart } from '@/components/SpendingChart';
 import { ExpenseForm } from '@/components/ExpenseForm';
-import { ExpenseImport } from '@/components/ExpenseImport';
+import { ExpenseImport, IncomeImport } from '@/components/ExpenseImport';
 import { ExpenseTable } from '@/components/ExpenseTable';
 import { CategoryForm } from '@/components/CategoryForm';
 import { CategoryList } from '@/components/CategoryList';
@@ -191,10 +191,6 @@ export default function Dashboard({ user }: DashboardProps) {
       <section className={styles.gridTwoColumn}>
         <ExpenseImport onImported={handleOperationsChanged} />
         <IncomeImport onImported={handleOperationsChanged} />
-      </section>
-
-      <section className={styles.gridSingle}>
-        <ExpenseImport onImported={handleOperationsChanged} />
       </section>
 
       <section className={styles.gridSingle}>

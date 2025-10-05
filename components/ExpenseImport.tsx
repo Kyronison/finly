@@ -1,3 +1,5 @@
+'use client';
+
 import { ChangeEvent, useMemo, useRef, useState } from 'react';
 
 import styles from './ExpenseImport.module.css';
@@ -6,6 +8,13 @@ type Mode = 'EXPENSE' | 'INCOME';
 
 interface Props {
   onImported: () => void;
+}
+
+interface ImportCardProps extends Props {
+  endpoint: string;
+  description: string;
+  title: string;
+  type: Mode;
 }
 
 interface ParsedOperation {
@@ -124,20 +133,19 @@ function parseTable(content: string): ParseResult {
   return { operations, skipped };
 }
 
-export function ExpenseImport({ onImported }: Props) {
-  const [mode, setMode] = useState<Mode>('EXPENSE');
+function ImportCard({ endpoint, description, onImported, title, type }: ImportCardProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<ImportResponse | null>(null);
   const [localSkipped, setLocalSkipped] = useState(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const description = useMemo(() => {
-    if (mode === 'INCOME') {
-      return 'Загрузите CSV или TSV-файл с датой, категорией, суммой и комментарием — недостающие категории доходов создадутся автоматически.';
+  const hint = useMemo(() => {
+    if (type === 'INCOME') {
+      return 'Категория обязательна для каждой строки.';
     }
-    return 'Загрузите CSV или TSV-файл с датой, категорией, суммой и комментарием — мы импортируем траты и создадим категории, если их ещё нет.';
-  }, [mode]);
+    return 'Категория может быть пустой — мы сохраним расход без неё.';
+  }, [type]);
 
   async function handleFileSelected(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -157,10 +165,10 @@ export function ExpenseImport({ onImported }: Props) {
 
       setLocalSkipped(parsed.skipped);
 
-      const response = await fetch('/api/expenses/import', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operations: parsed.operations, type: mode }),
+        body: JSON.stringify({ operations: parsed.operations }),
       });
 
       if (!response.ok) {
@@ -184,34 +192,9 @@ export function ExpenseImport({ onImported }: Props) {
   return (
     <div className={styles.card}>
       <header className={styles.header}>
-        <h3 className={styles.title}>Импорт операций</h3>
+        <h3 className={styles.title}>{title}</h3>
         <p className={styles.caption}>{description}</p>
       </header>
-
-      <div className={styles.modeToggle}>
-        <label className={styles.modeOption}>
-          <input
-            type="radio"
-            name="import-mode"
-            value="EXPENSE"
-            checked={mode === 'EXPENSE'}
-            onChange={() => setMode('EXPENSE')}
-            disabled={isLoading}
-          />
-          Расходы
-        </label>
-        <label className={styles.modeOption}>
-          <input
-            type="radio"
-            name="import-mode"
-            value="INCOME"
-            checked={mode === 'INCOME'}
-            onChange={() => setMode('INCOME')}
-            disabled={isLoading}
-          />
-          Доходы
-        </label>
-      </div>
 
       <div className={styles.actions}>
         <input
@@ -230,7 +213,9 @@ export function ExpenseImport({ onImported }: Props) {
         >
           {isLoading ? 'Импортирую…' : 'Выбрать файл'}
         </button>
-        <span className={styles.hint}>Требуются столбцы «Дата», «Категория», «Стоимость», «Комментарий».</span>
+        <span className={styles.hint}>
+          Требуются столбцы «Дата», «Категория», «Стоимость», «Комментарий». {hint}
+        </span>
       </div>
 
       {error && <p className={styles.error}>{error}</p>}
@@ -249,5 +234,29 @@ export function ExpenseImport({ onImported }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+export function ExpenseImport({ onImported }: Props) {
+  return (
+    <ImportCard
+      title="Импорт расходов"
+      description="Загрузите CSV или TSV-файл с датой, категорией, суммой и комментарием — мы импортируем траты и создадим категории, если их ещё нет."
+      endpoint="/api/expenses/import"
+      type="EXPENSE"
+      onImported={onImported}
+    />
+  );
+}
+
+export function IncomeImport({ onImported }: Props) {
+  return (
+    <ImportCard
+      title="Импорт доходов"
+      description="Загрузите CSV или TSV-файл с датой, категорией, суммой и комментарием — недостающие категории доходов создадутся автоматически."
+      endpoint="/api/incomes/import"
+      type="INCOME"
+      onImported={onImported}
+    />
   );
 }
