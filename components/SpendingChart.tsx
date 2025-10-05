@@ -19,11 +19,10 @@ export function SpendingChart({ data }: Props) {
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .map((point) => {
       const parsed = new Date(point.date);
-      const label = format(parsed, 'LLLL yyyy', { locale: ru });
-      const formattedLabel = label.charAt(0).toUpperCase() + label.slice(1);
+      const label = format(parsed, 'd MMMM yyyy', { locale: ru });
       return {
         ...point,
-        label: formattedLabel,
+        label: label.charAt(0).toUpperCase() + label.slice(1),
       };
     });
 

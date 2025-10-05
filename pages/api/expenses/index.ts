@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { addMonths, endOfMonth, format, formatISO, parseISO, startOfMonth } from 'date-fns';
+import { addMonths, endOfMonth, format, formatISO, parseISO, startOfMonth, subMonths } from 'date-fns';
 
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
@@ -58,21 +58,33 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     typeof req.query.end === 'string' ? req.query.end : undefined,
   );
 
-  const operations = await prisma.expense.findMany({
-    where: {
-      userId,
-      date: { gte: start, lte: end },
-    },
-    include: { category: true },
-    orderBy: { date: 'desc' },
-  });
+  const [expenses, timelineExpenses] = await Promise.all([
+    prisma.expense.findMany({
+      where: {
+        userId,
+        date: { gte: start, lte: end },
+      },
+      include: { category: true },
+      orderBy: { date: 'desc' },
+    }),
+    prisma.expense.findMany({
+      where: {
+        userId,
+        date: {
+          gte: startOfMonth(subMonths(start, 11)),
+          lte: end,
+        },
+      },
+      include: { category: true },
+    }),
+  ]);
 
   const totals = {
     income: 0,
     expenses: 0,
   };
 
-  operations.forEach((expense) => {
+  expenses.forEach((expense) => {
     if (expense.category?.type === 'INCOME') {
       totals.income += Number(expense.amount);
     } else {
@@ -89,7 +101,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     }
   >();
 
-  operations.forEach((operation) => {
+  timelineExpenses.forEach((operation) => {
     const monthKey = format(operation.date, 'yyyy-MM');
     const bucket =
       monthlyTotals.get(monthKey) ?? {
@@ -108,8 +120,8 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     monthlyTotals.set(monthKey, bucket);
   });
 
-  const timelineStart = startOfMonth(start);
-  const timelineEnd = endOfMonth(end);
+  const timelineStart = startOfMonth(subMonths(start, 11));
+  const timelineEnd = end;
   const monthly: Array<{ date: string; income: number; expenses: number }> = [];
 
   for (

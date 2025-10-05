@@ -104,26 +104,16 @@ export default function Dashboard({ user }: DashboardProps) {
     [categories.data],
   );
 
-  const selectedPeriodLabel = useMemo(() => {
+  const selectedMonthLabel = useMemo(() => {
     try {
-      const startParsed = new Date(`${startMonth}-01T00:00:00`);
-      const endParsed = new Date(`${endMonth}-01T00:00:00`);
-      if (Number.isNaN(startParsed.getTime()) || Number.isNaN(endParsed.getTime())) return '';
-
-      const startFormatted = format(startParsed, 'LLLL yyyy', { locale: ru });
-      const endFormatted = format(endParsed, 'LLLL yyyy', { locale: ru });
-      const startLabel = startFormatted.charAt(0).toUpperCase() + startFormatted.slice(1);
-      const endLabel = endFormatted.charAt(0).toUpperCase() + endFormatted.slice(1);
-
-      if (startMonth === endMonth) {
-        return startLabel;
-      }
-
-      return `${startLabel} — ${endLabel}`;
+      const parsed = new Date(`${selectedMonth}-01T00:00:00`);
+      if (Number.isNaN(parsed.getTime())) return '';
+      const formatted = format(parsed, 'LLLL yyyy', { locale: ru });
+      return formatted.charAt(0).toUpperCase() + formatted.slice(1);
     } catch (error) {
       return '';
     }
-  }, [endMonth, startMonth]);
+  }, [selectedMonth]);
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -141,38 +131,17 @@ export default function Dashboard({ user }: DashboardProps) {
       <div className={styles.headerRow}>
         <div>
           <h1>Финансовый отчёт</h1>
-          <p>Период: {selectedPeriodLabel}</p>
+          <p>Месяц: {selectedMonthLabel}</p>
         </div>
-        <div className={styles.periodPickerGroup}>
-          <input
-            type="month"
-            className={styles.monthPicker}
-            value={startMonth}
-            aria-label="Начало периода"
-            onChange={(event) => {
-              const value = event.target.value;
-              if (!value) return;
-              setStartMonth(value);
-              if (value > endMonth) {
-                setEndMonth(value);
-              }
-            }}
-          />
-          <input
-            type="month"
-            className={styles.monthPicker}
-            value={endMonth}
-            aria-label="Конец периода"
-            onChange={(event) => {
-              const value = event.target.value;
-              if (!value) return;
-              setEndMonth(value);
-              if (value < startMonth) {
-                setStartMonth(value);
-              }
-            }}
-          />
-        </div>
+        <input
+          type="month"
+          className={styles.monthPicker}
+          value={selectedMonth}
+          onChange={(event) => {
+            const value = event.target.value;
+            setSelectedMonth(value);
+          }}
+        />
       </div>
 
       <section className={styles.metricsGrid}>
