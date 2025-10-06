@@ -141,6 +141,10 @@ type GetCandlesResponse = {
   candles?: ApiHistoricCandle[] | null;
 };
 
+type InstrumentBrand = {
+  logoName?: string | null;
+};
+
 type Instrument = {
   figi?: string | null;
   ticker?: string | null;
@@ -148,6 +152,7 @@ type Instrument = {
   instrumentType?: string | null;
   lot?: number | string | null;
   currency?: string | null;
+  brand?: InstrumentBrand | null;
 };
 
 type InstrumentResponse = {
@@ -195,6 +200,7 @@ type InstrumentMeta = {
   instrumentType?: string;
   lot?: number | null;
   currency?: string | null;
+  brandLogoName?: string | null;
 };
 
 type PortfolioSnapshotPoint = {
@@ -607,6 +613,7 @@ async function enrichInstrumentMetadata(
       instrumentType: position.instrumentType ?? undefined,
       lot: position.lot ?? undefined,
       currency: position.currency ?? undefined,
+      brandLogoName: undefined,
     });
   });
 
@@ -644,6 +651,7 @@ async function enrichInstrumentMetadata(
           instrumentType: instrument.instrumentType ?? existing?.instrumentType ?? undefined,
           lot: parseNumber(instrument.lot),
           currency: instrument.currency ?? existing?.currency ?? undefined,
+          brandLogoName: instrument.brand?.logoName ?? existing?.brandLogoName ?? undefined,
         });
       }
     } catch (error) {
@@ -831,6 +839,7 @@ export async function syncTinkoffPortfolio(connectionId: string) {
       expectedYieldPercent: roundNumber(expectedYieldPercent),
       currentPrice: roundNumber(currentPriceValue),
       currency: position.currency ?? meta?.currency ?? null,
+      brandLogoName: meta?.brandLogoName ?? null,
     };
   });
 

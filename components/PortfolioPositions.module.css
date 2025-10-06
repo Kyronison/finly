@@ -40,6 +40,36 @@
   font-size: 14px;
 }
 
+.instrumentCell {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.instrumentLogo {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #fff;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.instrumentLogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

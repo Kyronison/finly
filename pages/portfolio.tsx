@@ -43,6 +43,7 @@ interface PortfolioResponse {
     investedAmount: number;
     currentValue: number;
     currency: string | null;
+    brandLogoName: string | null;
   }>;
   operations: Array<{
     id: string;
