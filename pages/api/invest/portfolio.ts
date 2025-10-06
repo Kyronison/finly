@@ -71,6 +71,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       investedAmount: Math.round(invested * 100) / 100,
       currentValue: Math.round(currentValue * 100) / 100,
       currency: position.currency,
+      brandLogoName: position.brandLogoName,
     };
   });
 

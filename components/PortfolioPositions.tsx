@@ -1,3 +1,6 @@
+import Image from 'next/image';
+import { useState } from 'react';
+
 import styles from './PortfolioPositions.module.css';
 
 interface PositionRow {
@@ -15,10 +18,72 @@ interface PositionRow {
   investedAmount: number;
   currentValue: number;
   currency: string | null;
+  brandLogoName: string | null;
 }
 
 interface Props {
   positions: PositionRow[];
+}
+
+const instrumentTypeLabels: Record<string, string> = {
+  share: 'Акция',
+  bond: 'Облигация',
+  currency: 'Валюта',
+  etf: 'Фонд',
+  future: 'Фьючерс',
+  option: 'Опцион',
+};
+
+function getInstrumentTypeLabel(type: string | null) {
+  if (!type) return '—';
+  const normalized = type.toLowerCase();
+  return instrumentTypeLabels[normalized] ?? type;
+}
+
+function getInstrumentLogoUrl(position: PositionRow) {
+  const logoName = position.brandLogoName?.trim();
+  if (!logoName) return null;
+
+  const baseName = logoName.replace(/\.png$/i, '');
+  if (!baseName) return null;
+
+  return `https://invest-brands.cdn-tinkoff.ru/${baseName}x160.png`;
+}
+
+function InstrumentLogo({ position }: { position: PositionRow }) {
+  const [showImage, setShowImage] = useState(true);
+  const instrumentName = position.name ?? position.ticker ?? position.figi;
+  const logoUrl = getInstrumentLogoUrl(position);
+
+  const fallbackLetters = (instrumentName ?? '—')
+    .replace(/[^A-Za-zА-Яа-я0-9]/g, '')
+    .slice(0, 2)
+    .toUpperCase()
+    || '—';
+
+  if (!logoUrl || !showImage) {
+    return (
+      <div
+        className={styles.instrumentLogo}
+        role="img"
+        aria-label={instrumentName ?? 'Инструмент портфеля'}
+      >
+        {fallbackLetters}
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.instrumentLogo}>
+      <Image
+        src={logoUrl}
+        alt={instrumentName ?? 'Инструмент портфеля'}
+        width={40}
+        height={40}
+        onError={() => setShowImage(false)}
+      />
+    </div>
+  );
 }
 
 export function PortfolioPositions({ positions }: Props) {
@@ -44,12 +109,16 @@ export function PortfolioPositions({ positions }: Props) {
                 ? (yieldValue / position.investedAmount) * 100
                 : 0);
               const isPositive = yieldValue >= 0;
+              const instrumentLabel = getInstrumentTypeLabel(position.instrumentType);
               return (
                 <tr key={position.id}>
                   <td>
-                    <div>
-                      <div>{position.ticker ?? position.figi}</div>
-                      <div className={styles.badge}>{position.instrumentType ?? '—'}</div>
+                    <div className={styles.instrumentCell}>
+                      <InstrumentLogo position={position} />
+                      <div>
+                        <div>{position.ticker ?? position.figi}</div>
+                        <div className={styles.badge}>{instrumentLabel}</div>
+                      </div>
                     </div>
                   </td>
                   <td>

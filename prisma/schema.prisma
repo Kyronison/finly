@@ -93,6 +93,7 @@ model PortfolioPosition {
   expectedYield        Float?
   expectedYieldPercent Float?
   currency             String?
+  brandLogoName        String?
   updatedAt            DateTime            @default(now())
 
   @@index([connectionId, figi])
