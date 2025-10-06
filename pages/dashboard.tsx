@@ -1,7 +1,7 @@
-import { useCallback, useMemo, useState, ChangeEvent } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import type { GetServerSideProps } from 'next';
 import jwt from 'jsonwebtoken';
-import { format } from 'date-fns';
+import { addMonths, format, subMonths } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import useSWR from 'swr';
 import { useRouter } from 'next/router';
@@ -67,15 +67,34 @@ interface AnalyticsResponse {
   streak: number;
 }
 
+type Timeframe = '6M' | '1Y' | '3Y' | 'ALL';
+
+const timeframeOptions: Array<{ value: Timeframe; label: string }> = [
+  { value: '6M', label: '6M' },
+  { value: '1Y', label: '1Y' },
+  { value: '3Y', label: '3Y' },
+  { value: 'ALL', label: 'All time' },
+];
+
+const timeframeDurations: Record<Exclude<Timeframe, 'ALL'>, number> = {
+  '6M': 6,
+  '1Y': 12,
+  '3Y': 36,
+};
+
+const allTimeStartMonth = '1900-01';
+
 export default function Dashboard({ user }: DashboardProps) {
   const router = useRouter();
-  const defaultMonth = format(new Date(), 'yyyy-MM');
-  const [startMonth, setStartMonth] = useState(defaultMonth);
-  const [endMonth, setEndMonth] = useState(defaultMonth);
+  const currentMonth = format(new Date(), 'yyyy-MM');
+  const [timeframe, setTimeframe] = useState<Timeframe>('6M');
+  const [anchorMonth, setAnchorMonth] = useState(currentMonth);
 
   const formatMonthLabel = useCallback((month: string) => {
     try {
-      const parsed = new Date(`${month}-01T00:00:00`);
+      if (!month) return '';
+      const normalized = month.length === 7 ? `${month}-01` : month.slice(0, 10);
+      const parsed = new Date(`${normalized}T00:00:00`);
       if (Number.isNaN(parsed.getTime())) return '';
       const formatted = format(parsed, 'LLLL yyyy', { locale: ru });
       return formatted.charAt(0).toUpperCase() + formatted.slice(1);
@@ -84,26 +103,24 @@ export default function Dashboard({ user }: DashboardProps) {
     }
   }, []);
 
-  const periodLabel = useMemo(() => {
-    const startLabel = formatMonthLabel(startMonth);
-    const endLabel = formatMonthLabel(endMonth);
+  const startMonth = useMemo(() => {
+    if (timeframe === 'ALL') {
+      return allTimeStartMonth;
+    }
 
-    if (!startLabel || !endLabel) return '';
-    if (startLabel === endLabel) return startLabel;
-    return `${startLabel} — ${endLabel}`;
-  }, [endMonth, formatMonthLabel, startMonth]);
+    const months = timeframeDurations[timeframe];
+    const anchorDate = new Date(`${anchorMonth}-01T00:00:00`);
+    const startDate = subMonths(anchorDate, Math.max(months - 1, 0));
+    return format(startDate, 'yyyy-MM');
+  }, [anchorMonth, timeframe]);
 
-  const handleStartChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setStartMonth(value);
-    setEndMonth((previous) => (previous < value ? value : previous));
-  }, []);
+  const endMonth = useMemo(() => {
+    if (timeframe === 'ALL') {
+      return currentMonth;
+    }
 
-  const handleEndChange = useCallback((event: ChangeEvent<HTMLInputElement>) => {
-    const value = event.target.value;
-    setEndMonth(value);
-    setStartMonth((previous) => (previous > value ? value : previous));
-  }, []);
+    return anchorMonth;
+  }, [anchorMonth, currentMonth, timeframe]);
 
   const periodQuery = useMemo(() => {
     const params = new URLSearchParams();
@@ -125,6 +142,75 @@ export default function Dashboard({ user }: DashboardProps) {
   }>(
     expensesKey,
   );
+
+  const periodLabel = useMemo(() => {
+    if (timeframe === 'ALL') {
+      const monthly = expenses.data?.monthly ?? [];
+      if (monthly.length === 0) {
+        return 'За всё время';
+      }
+
+      const firstWithData = monthly.find((point) => point.income !== 0 || point.expenses !== 0);
+      const lastWithData = [...monthly]
+        .reverse()
+        .find((point) => point.income !== 0 || point.expenses !== 0);
+
+      const first = formatMonthLabel(firstWithData?.date ?? monthly[0].date);
+      const last = formatMonthLabel(lastWithData?.date ?? monthly[monthly.length - 1].date);
+
+      if (!first || !last) {
+        return 'За всё время';
+      }
+
+      return first === last ? first : `${first} — ${last}`;
+    }
+
+    const startLabel = formatMonthLabel(startMonth);
+    const endLabel = formatMonthLabel(endMonth);
+
+    if (!startLabel || !endLabel) return '';
+    if (startLabel === endLabel) return startLabel;
+    return `${startLabel} — ${endLabel}`;
+  }, [endMonth, expenses.data?.monthly, formatMonthLabel, startMonth, timeframe]);
+
+  const handleTimeframeChange = useCallback(
+    (value: Timeframe) => {
+      setTimeframe(value);
+      setAnchorMonth((previous) => {
+        if (value === 'ALL') {
+          return currentMonth;
+        }
+
+        return previous > currentMonth ? currentMonth : previous;
+      });
+    },
+    [currentMonth],
+  );
+
+  const handleNavigate = useCallback(
+    (direction: 'backward' | 'forward') => {
+      if (timeframe === 'ALL') return;
+
+      const months = timeframeDurations[timeframe];
+      if (!months) return;
+
+      setAnchorMonth((previous) => {
+        const anchorDate = new Date(`${previous}-01T00:00:00`);
+        const shifted =
+          direction === 'backward' ? subMonths(anchorDate, months) : addMonths(anchorDate, months);
+        const candidate = format(shifted, 'yyyy-MM');
+
+        if (direction === 'forward' && candidate > currentMonth) {
+          return currentMonth;
+        }
+
+        return candidate;
+      });
+    },
+    [currentMonth, timeframe],
+  );
+
+  const canNavigateForward = timeframe !== 'ALL' && anchorMonth < currentMonth;
 
   const expenseCategories = useMemo(
     () => (categories.data?.categories ?? []).filter((category) => category.type === 'EXPENSE'),
@@ -154,15 +240,42 @@ export default function Dashboard({ user }: DashboardProps) {
           <h1>Финансовый отчёт</h1>
           <p>Период: {periodLabel}</p>
         </div>
-        <div className={styles.periodPickerGroup}>
-          <label className={styles.periodPicker}>
-            <span>Начало периода</span>
-            <input type="month" value={startMonth} onChange={handleStartChange} />
-          </label>
-          <label className={styles.periodPicker}>
-            <span>Конец периода</span>
-            <input type="month" value={endMonth} onChange={handleEndChange} />
-          </label>
+        <div className={styles.timeframeControls}>
+          <div className={styles.timeframeGroup}>
+            {timeframeOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={
+                  option.value === timeframe
+                    ? `${styles.timeframeButton} ${styles.timeframeButtonActive}`
+                    : styles.timeframeButton
+                }
+                onClick={() => handleTimeframeChange(option.value)}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          {timeframe !== 'ALL' ? (
+            <div className={styles.navigator}>
+              <button
+                type="button"
+                className={styles.navigatorButton}
+                onClick={() => handleNavigate('backward')}
+              >
+                ‹
+              </button>
+              <button
+                type="button"
+                className={styles.navigatorButton}
+                onClick={() => handleNavigate('forward')}
+                disabled={!canNavigateForward}
+              >
+                ›
+              </button>
+            </div>
+          ) : null}
         </div>
       </div>
 
