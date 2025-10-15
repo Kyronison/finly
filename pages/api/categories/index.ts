@@ -59,7 +59,7 @@ async function getCategories(req: NextApiRequest, res: NextApiResponse) {
     typeof req.query.end === 'string' ? req.query.end : undefined,
   );
 
-  const [categories, operations] = await Promise.all([
+  const [categories, operations, usageCounts] = await Promise.all([
     prisma.category.findMany({
       where: { userId },
       orderBy: { createdAt: 'asc' },
@@ -72,7 +72,34 @@ async function getCategories(req: NextApiRequest, res: NextApiResponse) {
       },
       include: { category: true },
     }),
+    prisma.expense.groupBy({
+      by: ['categoryId'],
+      where: {
+        userId,
+        categoryId: { not: null },
+      },
+      _count: { categoryId: true },
+    }),
   ]);
+
+  const usedCategoryIds = new Set(
+    usageCounts
+      .map((item) => item.categoryId)
+      .filter((value): value is string => Boolean(value)),
+  );
+
+  const unusedCategoryIds = categories
+    .filter((category) => !usedCategoryIds.has(category.id))
+    .map((category) => category.id);
+
+  let actualCategories = categories;
+
+  if (unusedCategoryIds.length > 0) {
+    await prisma.category.deleteMany({
+      where: { id: { in: unusedCategoryIds }, userId },
+    });
+    actualCategories = categories.filter((category) => !unusedCategoryIds.includes(category.id));
+  }
 
   const totalsByCategory = new Map<string, { income: number; expenses: number }>();
   operations.forEach((operation) => {
@@ -87,7 +114,7 @@ async function getCategories(req: NextApiRequest, res: NextApiResponse) {
     totalsByCategory.set(operation.categoryId, bucket);
   });
 
-  const enriched = categories.map((category) => {
+  const enriched = actualCategories.map((category) => {
     const bucket = totalsByCategory.get(category.id) ?? { income: 0, expenses: 0 };
     const spent = bucket.expenses;
     const earned = bucket.income;

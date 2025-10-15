@@ -1,0 +1,54 @@
+.container {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.header h3 {
+  margin: 0 0 4px;
+}
+
+.header p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: right;
+}
+
+.summaryLabel {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.summaryValue {
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.chartWrapper {
+  width: 100%;
+  height: 320px;
+}
+
+@media (max-width: 768px) {
+  .summary {
+    width: 100%;
+    text-align: left;
+  }
+}

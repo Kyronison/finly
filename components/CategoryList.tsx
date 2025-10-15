@@ -14,12 +14,15 @@ interface Category {
   color?: string | null;
 }
 
+type Mode = 'ALL' | 'EXPENSES' | 'INCOME';
+
 interface Props {
   categories: Category[];
   onChanged: () => void;
+  mode?: Mode;
 }
 
-export function CategoryList({ categories, onChanged }: Props) {
+export function CategoryList({ categories, onChanged, mode = 'ALL' }: Props) {
   const [error, setError] = useState('');
 
   async function updateCategory(id: string, payload: Record<string, unknown>) {
@@ -82,53 +85,58 @@ export function CategoryList({ categories, onChanged }: Props) {
   const expenseCategories = categories.filter((category) => category.type === 'EXPENSE');
   const incomeCategories = categories.filter((category) => category.type === 'INCOME');
 
+  const shouldRenderExpenses = mode === 'ALL' || mode === 'EXPENSES';
+  const shouldRenderIncome = mode === 'ALL' || mode === 'INCOME';
+
   return (
     <div className={styles.container}>
-      <section className={styles.section}>
-        <header className={styles.header}>
-          <span>Категории расходов</span>
-          <span className={styles.caption}>Лимиты и прогресс расходов</span>
-        </header>
-        {expenseCategories.length ? (
-          <div className={styles.list}>
-            {expenseCategories.map((category) => (
-              <div key={category.id} className={styles.item}>
-                <div className={styles.info}>
-                  <div className={styles.icon} style={{ background: category.color ?? '#272637' }} />
-                  <div>
-                    <div className={styles.name}>{category.name}</div>
-                    <div className={styles.meta}>Расход</div>
+      {shouldRenderExpenses ? (
+        <section className={styles.section}>
+          <header className={styles.header}>
+            <span>Категории расходов</span>
+            <span className={styles.caption}>Лимиты и прогресс расходов</span>
+          </header>
+          {expenseCategories.length ? (
+            <div className={styles.list}>
+              {expenseCategories.map((category) => (
+                <div key={category.id} className={styles.item}>
+                  <div className={styles.info}>
+                    <div className={styles.icon} style={{ background: category.color ?? '#272637' }} />
+                    <div>
+                      <div className={styles.name}>{category.name}</div>
+                      <div className={styles.meta}>Расход</div>
+                    </div>
+                  </div>
+                  <div className={styles.progressWrapper}>
+                    <ProgressBar value={category.progress ?? 0} color={category.color ?? undefined} />
+                    <div className={styles.progressText}>
+                      {(category.spent ?? 0).toLocaleString('ru-RU')} ₽
+                      {category.budget
+                        ? ` из ${category.budget.toLocaleString('ru-RU')} ₽`
+                        : ' • без лимита'}
+                    </div>
+                  </div>
+                  <div className={styles.actions}>
+                    <button type="button" onClick={() => handleRename(category.id, category.name)}>
+                      Переименовать
+                    </button>
+                    <button type="button" onClick={() => handleBudget(category.id, category.budget)}>
+                      Лимит
+                    </button>
+                    <button type="button" className={styles.danger} onClick={() => handleDelete(category.id)}>
+                      Удалить
+                    </button>
                   </div>
                 </div>
-                <div className={styles.progressWrapper}>
-                  <ProgressBar value={category.progress ?? 0} color={category.color ?? undefined} />
-                  <div className={styles.progressText}>
-                    {(category.spent ?? 0).toLocaleString('ru-RU')} ₽
-                    {category.budget
-                      ? ` из ${category.budget.toLocaleString('ru-RU')} ₽`
-                      : ' • без лимита'}
-                  </div>
-                </div>
-                <div className={styles.actions}>
-                  <button type="button" onClick={() => handleRename(category.id, category.name)}>
-                    Переименовать
-                  </button>
-                  <button type="button" onClick={() => handleBudget(category.id, category.budget)}>
-                    Лимит
-                  </button>
-                  <button type="button" className={styles.danger} onClick={() => handleDelete(category.id)}>
-                    Удалить
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <p className={styles.placeholder}>Добавьте категории, чтобы следить за лимитами расходов.</p>
-        )}
-      </section>
+              ))}
+            </div>
+          ) : (
+            <p className={styles.placeholder}>Добавьте категории, чтобы следить за лимитами расходов.</p>
+          )}
+        </section>
+      ) : null}
 
-      {incomeCategories.length ? (
+      {shouldRenderIncome && incomeCategories.length ? (
         <section className={styles.section}>
           <header className={styles.header}>
             <span>Категории доходов</span>
