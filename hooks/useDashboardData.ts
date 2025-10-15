@@ -30,6 +30,7 @@ interface MonthlyDataPoint {
   date: string;
   income: number;
   expenses: number;
+  passiveIncome: number;
   expenseBreakdown: Array<{
     id: string;
     name: string;
@@ -43,6 +44,8 @@ interface AnalyticsResponse {
     income: number;
     expenses: number;
     balance: number;
+    passiveIncome?: number;
+    activeIncome?: number;
   };
   breakdown: Array<{
     id: string;
@@ -54,6 +57,10 @@ interface AnalyticsResponse {
   }>;
   uncategorized: number;
   streak: number;
+  passiveIncome?: {
+    total: number;
+    byMonth: Array<{ month: string; amount: number }>;
+  };
 }
 
 export type Timeframe = '6M' | '1Y' | '3Y' | 'ALL';
@@ -86,10 +93,12 @@ export interface DashboardData {
   expenses: ReturnType<
     typeof useSWR<{
       expenses: ExpenseItem[];
+      incomes: ExpenseItem[];
       monthly: MonthlyDataPoint[];
-      totals: { income: number; expenses: number };
+      totals: { income: number; expenses: number; passiveIncome?: number; activeIncome?: number };
       periodStart?: string;
       periodEnd?: string;
+      passiveIncome?: { total: number; byMonth: Array<{ month: string; amount: number }> };
     }>
   >;
   expenseCategories: Category[];
@@ -149,9 +158,10 @@ export function useDashboardData(): DashboardData {
     expenses: ExpenseItem[];
     incomes: ExpenseItem[];
     monthly: MonthlyDataPoint[];
-    totals: { income: number; expenses: number };
+    totals: { income: number; expenses: number; passiveIncome?: number; activeIncome?: number };
     periodStart?: string;
     periodEnd?: string;
+    passiveIncome?: { total: number; byMonth: Array<{ month: string; amount: number }> };
   }>(`/api/expenses?${periodQuery}`);
 
   const allCategories = useMemo(

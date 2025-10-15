@@ -4,6 +4,7 @@ import { endOfMonth, formatISO, parseISO, startOfMonth, subDays } from 'date-fns
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { shouldIgnoreCategory } from '@/lib/financeFilters';
+import { calculatePassiveIncomeSummary } from '@/lib/investAnalytics';
 
 function parseBoundary(value?: string) {
   if (!value) return null;
@@ -51,13 +52,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     typeof req.query.end === 'string' ? req.query.end : undefined,
   );
 
-  const [categories, expenses] = await Promise.all([
+  const [categories, expenses, passiveIncomeSummary] = await Promise.all([
     prisma.category.findMany({ where: { userId } }),
     prisma.expense.findMany({
       where: { userId, date: { gte: start, lte: end } },
       include: { category: true },
       orderBy: { date: 'desc' },
     }),
+    calculatePassiveIncomeSummary(userId, start, end),
   ]);
 
   const totals = { income: 0, expenses: 0 };
@@ -86,6 +88,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     daySet.add(formatISO(expense.date, { representation: 'date' }));
   });
+
+  const activeIncome = totals.income;
+  const passiveIncome = passiveIncomeSummary.total;
 
   const breakdown = Array.from(byCategory.values())
     .map((entry) => {
@@ -125,12 +130,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   return res.status(200).json({
     totals: {
-      income: totals.income,
+      income: activeIncome + passiveIncome,
       expenses: totals.expenses,
-      balance: totals.income - totals.expenses,
+      balance: activeIncome + passiveIncome - totals.expenses,
+      activeIncome,
+      passiveIncome,
     },
     breakdown,
     uncategorized: uncategorized?.spent ?? 0,
     streak,
+    passiveIncome: {
+      total: passiveIncome,
+      byMonth: passiveIncomeSummary.byMonth,
+    },
   });
 }

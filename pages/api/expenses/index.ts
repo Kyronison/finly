@@ -6,6 +6,7 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { enumerateMonths, formatMonthKey, resolvePeriod } from '@/lib/period';
 import { shouldIgnoreCategory } from '@/lib/financeFilters';
+import { calculatePassiveIncomeSummary } from '@/lib/investAnalytics';
 
 const UNCATEGORIZED_CATEGORY_ID = 'uncategorized';
 
@@ -61,6 +62,8 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
 
   const expenseOperations = filteredRawExpenses.filter((expense) => expense.category?.type !== 'INCOME');
   const incomeOperations = filteredRawExpenses.filter((expense) => expense.category?.type === 'INCOME');
+
+  const passiveIncomeSummary = await calculatePassiveIncomeSummary(userId, start, end);
 
   const monthlyTotals = new Map<
     string,
@@ -121,13 +124,20 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     }>;
   }> = [];
 
+  const passiveIncomeByMonth = new Map(
+    passiveIncomeSummary.byMonth.map((item) => [item.month, item.amount] as const),
+  );
+
   enumerateMonths(start, end).forEach((cursor) => {
     const monthKey = formatMonthKey(cursor);
     const bucket = monthlyTotals.get(monthKey);
+    const passiveIncomeAmount = passiveIncomeByMonth.get(monthKey) ?? 0;
+
     monthly.push({
       date: formatISO(startOfMonth(cursor), { representation: 'date' }),
-      income: bucket?.income ?? 0,
+      income: (bucket?.income ?? 0) + passiveIncomeAmount,
       expenses: bucket?.expenses ?? 0,
+      passiveIncome: passiveIncomeAmount,
       expenseBreakdown: bucket
         ? Array.from(bucket.expensesByCategory.entries()).map(([id, info]) => ({
             id,
@@ -149,13 +159,25 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     amount: Number(item.amount),
   }));
 
+  const activeIncome = totals.income;
+  const passiveIncome = passiveIncomeSummary.total;
+
   return res.status(200).json({
     expenses,
     incomes,
-    totals,
+    totals: {
+      income: activeIncome + passiveIncome,
+      expenses: totals.expenses,
+      passiveIncome,
+      activeIncome,
+    },
     monthly,
     periodStart: formatISO(start, { representation: 'date' }),
     periodEnd: formatISO(end, { representation: 'date' }),
+    passiveIncome: {
+      total: passiveIncome,
+      byMonth: passiveIncomeSummary.byMonth,
+    },
   });
 }
 
