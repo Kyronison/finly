@@ -13,6 +13,7 @@ import { PortfolioPositions } from '@/components/PortfolioPositions';
 import { PortfolioOperations } from '@/components/PortfolioOperations';
 import { PortfolioDividends } from '@/components/PortfolioDividends';
 import { authCookieName } from '@/lib/auth';
+import { ALL_ACCOUNTS_ID, ALL_ACCOUNTS_LABEL } from '@/lib/investAccounts';
 import styles from '@/styles/Portfolio.module.css';
 
 interface AccountPreview {
@@ -123,8 +124,15 @@ export default function PortfolioPage({ user }: PortfolioPageProps) {
       if (!response.ok) {
         setError(payload.message ?? 'Не удалось подключить портфель');
         if (payload.requiresAccountSelection && Array.isArray(payload.accounts)) {
-          setAvailableAccounts(payload.accounts as AccountPreview[]);
+          const accounts = payload.accounts as AccountPreview[];
+          setAvailableAccounts(accounts);
           setRequiresAccountSelection(true);
+          if (!accountId && data?.connection?.accountId === ALL_ACCOUNTS_ID) {
+            const hasAllAccountsOption = accounts.some((account) => account.brokerAccountId === ALL_ACCOUNTS_ID);
+            if (hasAllAccountsOption) {
+              setAccountId(ALL_ACCOUNTS_ID);
+            }
+          }
         }
         return;
       }
@@ -195,8 +203,18 @@ export default function PortfolioPage({ user }: PortfolioPageProps) {
           </div>
           {data?.connection ? (
             <div className={styles.statusRow}>
-              <span>Счёт: {data.connection.accountId ?? '—'}</span>
-              <span>Тип: {data.connection.brokerAccountType ?? '—'}</span>
+              <span>
+                Счёт:{' '}
+                {data.connection.accountId === ALL_ACCOUNTS_ID
+                  ? ALL_ACCOUNTS_LABEL
+                  : data.connection.accountId ?? '—'}
+              </span>
+              <span>
+                Тип:{' '}
+                {data.connection.accountId === ALL_ACCOUNTS_ID
+                  ? ALL_ACCOUNTS_LABEL
+                  : data.connection.brokerAccountType ?? '—'}
+              </span>
               <span>Последняя синхронизация: {lastSyncedLabel ?? 'ещё не выполнялась'}</span>
             </div>
           ) : null}
@@ -258,11 +276,19 @@ export default function PortfolioPage({ user }: PortfolioPageProps) {
                   required
                 >
                   <option value="">Выберите счёт</option>
-                  {availableAccounts.map((account) => (
-                    <option key={account.brokerAccountId} value={account.brokerAccountId}>
-                      {account.brokerAccountId} · {account.brokerAccountType}
-                    </option>
-                  ))}
+                  {availableAccounts.map((account) => {
+                    const isAllAccounts = account.brokerAccountId === ALL_ACCOUNTS_ID;
+                    const label = isAllAccounts
+                      ? ALL_ACCOUNTS_LABEL
+                      : account.brokerAccountType
+                        ? `${account.brokerAccountId} · ${account.brokerAccountType}`
+                        : account.brokerAccountId;
+                    return (
+                      <option key={account.brokerAccountId} value={account.brokerAccountId}>
+                        {label}
+                      </option>
+                    );
+                  })}
                 </select>
               )}
 
