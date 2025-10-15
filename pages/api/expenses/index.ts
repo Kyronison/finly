@@ -60,6 +60,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
   });
 
   const expenseOperations = filteredRawExpenses.filter((expense) => expense.category?.type !== 'INCOME');
+  const incomeOperations = filteredRawExpenses.filter((expense) => expense.category?.type === 'INCOME');
 
   const monthlyTotals = new Map<
     string,
@@ -143,8 +144,14 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     amount: Number(item.amount),
   }));
 
+  const incomes = incomeOperations.map((item) => ({
+    ...item,
+    amount: Number(item.amount),
+  }));
+
   return res.status(200).json({
     expenses,
+    incomes,
     totals,
     monthly,
     periodStart: formatISO(start, { representation: 'date' }),

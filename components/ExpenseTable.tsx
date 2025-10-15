@@ -28,6 +28,7 @@ interface Props {
   periodStart?: string;
   periodEnd?: string;
   allowUncategorized?: boolean;
+  mode?: 'EXPENSES' | 'INCOME' | 'ALL';
 }
 
 export function ExpenseTable({
@@ -37,6 +38,7 @@ export function ExpenseTable({
   periodStart,
   periodEnd,
   allowUncategorized = true,
+  mode = 'EXPENSES',
 }: Props) {
   const [error, setError] = useState('');
   const [exportError, setExportError] = useState('');
@@ -46,10 +48,15 @@ export function ExpenseTable({
   const [exportStart, setExportStart] = useState(periodStart ?? '');
   const [exportEnd, setExportEnd] = useState(periodEnd ?? '');
 
-  const expenseOnly = useMemo(
-    () => expenses.filter((expense) => expense.category?.type !== 'INCOME'),
-    [expenses],
-  );
+  const filteredOperations = useMemo(() => {
+    if (mode === 'ALL') {
+      return expenses;
+    }
+
+    return expenses.filter((expense) =>
+      mode === 'INCOME' ? expense.category?.type === 'INCOME' : expense.category?.type !== 'INCOME',
+    );
+  }, [expenses, mode]);
 
   useEffect(() => {
     setExportStart(periodStart ?? '');
@@ -59,8 +66,8 @@ export function ExpenseTable({
     setExportEnd(periodEnd ?? '');
   }, [periodEnd]);
 
-  const displayedExpenses = useMemo(() => expenseOnly.slice(0, 10), [expenseOnly]);
-  const hasMoreExpenses = expenseOnly.length > displayedExpenses.length;
+  const displayedExpenses = useMemo(() => filteredOperations.slice(0, 10), [filteredOperations]);
+  const hasMoreExpenses = filteredOperations.length > displayedExpenses.length;
 
   async function updateExpense(id: string, payload: Record<string, unknown>) {
     setError('');
@@ -274,7 +281,7 @@ export function ExpenseTable({
         <div className={styles.footerInfo}>
           <span>
             {displayedExpenses.length > 0
-              ? `Показано операций: ${displayedExpenses.length} из ${expenseOnly.length}`
+              ? `Показано операций: ${displayedExpenses.length} из ${filteredOperations.length}`
               : 'Нет операций для отображения'}
           </span>
           {hasMoreExpenses ? (
@@ -303,7 +310,7 @@ export function ExpenseTable({
             type="button"
             onClick={handleDeleteAll}
             className={styles.clearButton}
-            disabled={isClearing || expenseOnly.length === 0}
+            disabled={isClearing || filteredOperations.length === 0}
           >
             {isClearing ? 'Удаляем…' : 'Удалить все операции'}
           </button>

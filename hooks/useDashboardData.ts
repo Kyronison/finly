@@ -147,6 +147,7 @@ export function useDashboardData(): DashboardData {
   );
   const expenses = useSWR<{
     expenses: ExpenseItem[];
+    incomes: ExpenseItem[];
     monthly: MonthlyDataPoint[];
     totals: { income: number; expenses: number };
     periodStart?: string;
