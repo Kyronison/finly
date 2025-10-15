@@ -19,7 +19,13 @@ export function DashboardLayout({ user, onLogout, children }: Props) {
         <div className={styles.logo}>Автопилот</div>
         <nav className={styles.nav}>
           <Link href="/dashboard" className={styles.navItem}>
-            Отчёт
+            Расходы
+          </Link>
+          <Link href="/dashboard/income" className={styles.navItem}>
+            Доходы
+          </Link>
+          <Link href="/dashboard/balance" className={styles.navItem}>
+            Баланс
           </Link>
           <Link href="/portfolio" className={styles.navItem}>
             Инвестиции

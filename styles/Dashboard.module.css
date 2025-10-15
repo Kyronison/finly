@@ -108,6 +108,26 @@
   gap: 20px;
 }
 
+.balanceSummaryCard {
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 16px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.balanceSummaryCard h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.balanceSummaryCard p {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.4;
+}
+
 @media (max-width: 768px) {
   .headerRow {
     flex-direction: column;
