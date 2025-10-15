@@ -53,6 +53,32 @@ export async function calculatePassiveIncomeSummary(
     orderBy: { capturedAt: 'asc' },
   });
 
+  const contributionByMonth = new Map<string, number>();
+
+  const operations = await prisma.portfolioOperation.findMany({
+    where: {
+      connectionId: { in: connectionIds },
+      date: { gte: boundaryStart, lte: boundaryEnd },
+    },
+    select: {
+      date: true,
+      payment: true,
+      figi: true,
+    },
+  });
+
+  operations.forEach((operation) => {
+    if (operation.figi) return;
+    const amount = operation.payment;
+    if (typeof amount !== 'number' || Number.isNaN(amount) || amount === 0) {
+      return;
+    }
+
+    const monthKey = formatMonthKey(operation.date);
+    const current = contributionByMonth.get(monthKey) ?? 0;
+    contributionByMonth.set(monthKey, current + amount);
+  });
+
   const currencyStates = new Map<string, CurrencyState>();
 
   snapshots.forEach((snapshot) => {
@@ -111,7 +137,8 @@ export async function calculatePassiveIncomeSummary(
       }
     });
 
-    monthlyTotals.set(monthKey, roundAmount(monthSum));
+    const contribution = contributionByMonth.get(monthKey) ?? 0;
+    monthlyTotals.set(monthKey, roundAmount(monthSum - contribution));
   });
 
   const total = roundAmount(
