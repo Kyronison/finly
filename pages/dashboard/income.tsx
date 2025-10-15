@@ -10,6 +10,8 @@ import { CategoryForm } from '@/components/CategoryForm';
 import { CategoryList } from '@/components/CategoryList';
 import { ExpenseForm } from '@/components/ExpenseForm';
 import { IncomeChart } from '@/components/IncomeChart';
+import { ExpenseTable } from '@/components/ExpenseTable';
+import { IncomeHighlightsCard } from '@/components/IncomeHighlightsCard';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { getAuthenticatedUser, type AuthenticatedUser } from '@/lib/getAuthenticatedUser';
 import styles from '@/styles/Dashboard.module.css';
@@ -52,16 +54,21 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
     [monthlyPoints],
   );
 
-  const topIncomeCategory = useMemo(() => {
-    if (!incomeCategories.length) {
-      return null;
+  const [latestPoint, previousPoint] = useMemo(() => {
+    if (monthlyPoints.length === 0) {
+      return [null, null] as const;
     }
-    return incomeCategories.reduce((best, current) => {
-      const bestValue = best?.earned ?? 0;
-      const currentValue = current.earned ?? 0;
-      return currentValue > bestValue ? current : best;
-    }, incomeCategories[0]);
-  }, [incomeCategories]);
+    const latest = monthlyPoints[monthlyPoints.length - 1];
+    const previous = monthlyPoints.length > 1 ? monthlyPoints[monthlyPoints.length - 2] : null;
+    return [latest, previous] as const;
+  }, [monthlyPoints]);
+
+  const incomeDelta = latestPoint && previousPoint ? latestPoint.income - previousPoint.income : null;
+  const incomeDeltaValue =
+    incomeDelta === null
+      ? '—'
+      : `${incomeDelta > 0 ? '+' : ''}${Math.round(incomeDelta).toLocaleString('ru-RU')} ₽`;
+  const incomeDeltaSubtitle = previousPoint ? 'к прошлому месяцу' : 'Нет данных для сравнения';
 
   const incomeBreakdown = useMemo(
     () =>
@@ -72,9 +79,19 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
           name: category.name,
           amount: category.earned ?? 0,
           color: category.color,
-        })),
+        }))
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, 6),
     [incomeCategories],
   );
+
+  const topIncomeCategory = incomeBreakdown[0] ?? null;
+
+  const topIncomeHighlight = topIncomeCategory
+    ? { name: topIncomeCategory.name, amount: topIncomeCategory.amount, color: topIncomeCategory.color }
+    : null;
+
+  const incomeOperations = expenses.data?.incomes ?? [];
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' });
@@ -107,9 +124,9 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
           accent="violet"
         />
         <MetricCard
-          title="Ключевой источник"
-          value={formatCurrency(topIncomeCategory?.earned ?? 0)}
-          subtitle={topIncomeCategory?.name ?? 'Нет данных'}
+          title="Динамика"
+          value={incomeDeltaValue}
+          subtitle={incomeDeltaSubtitle}
           accent="orange"
         />
       </section>
@@ -124,6 +141,14 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
 
       <section className={styles.gridTwoColumn}>
         <CategoryForm mode="INCOME" onCreated={handleOperationsChanged} />
+        <IncomeHighlightsCard topCategory={topIncomeHighlight} totalIncome={totalIncome} />
+      </section>
+
+      <section className={styles.gridSingle}>
+        <CategoryList categories={incomeCategories} mode="INCOME" onChanged={handleOperationsChanged} />
+      </section>
+
+      <section className={styles.gridTwoColumn}>
         <ExpenseForm
           mode="INCOME"
           categories={incomeCategories}
@@ -133,7 +158,15 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
       </section>
 
       <section className={styles.gridSingle}>
-        <CategoryList categories={incomeCategories} mode="INCOME" onChanged={handleOperationsChanged} />
+        <ExpenseTable
+          expenses={incomeOperations}
+          categories={incomeCategories}
+          onChanged={handleOperationsChanged}
+          periodStart={expenses.data?.periodStart}
+          periodEnd={expenses.data?.periodEnd}
+          allowUncategorized={false}
+          mode="INCOME"
+        />
       </section>
 
     </DashboardLayout>

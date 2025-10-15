@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+
 import styles from './BreakdownList.module.css';
 import { ProgressBar } from './ProgressBar';
 
@@ -25,19 +27,31 @@ function formatShare(value: number): string {
 }
 
 export function BreakdownList({ items }: Props) {
-  const total = items.reduce((sum, item) => sum + item.spent, 0);
+  const sortedItems = useMemo(() => [...items].sort((a, b) => b.spent - a.spent), [items]);
+  const total = sortedItems.reduce((sum, item) => sum + item.spent, 0);
+
+  if (sortedItems.length === 0) {
+    return (
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <h3 className={styles.title}>Топ расходов</h3>
+        </div>
+        <p className={styles.placeholder}>Добавьте расходы, чтобы увидеть распределение по категориям.</p>
+      </div>
+    );
+  }
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <h3 className={styles.title}>Топ расходов</h3>
         <div className={styles.summary}>
-          <span>Категорий: {items.length}</span>
+          <span>Категорий: {sortedItems.length}</span>
           <span>Всего: {formatCurrency(total)}</span>
         </div>
       </div>
       <ul className={styles.list}>
-        {items.map((item) => {
+        {sortedItems.map((item) => {
           const share = total > 0 ? (item.spent / total) * 100 : 0;
           const limitLabel = item.budget ? `Лимит ${formatCurrency(item.budget)}` : 'Лимит не задан';
           let statusLabel: string | null = null;
@@ -64,7 +78,11 @@ export function BreakdownList({ items }: Props) {
                 </div>
               </div>
               <div className={styles.progressBlock}>
-                <ProgressBar value={item.progress ?? 0} color={item.color ?? undefined} />
+                <ProgressBar value={share / 100} color={item.color ?? undefined} />
+                <div className={styles.captionRow}>
+                  <span className={styles.caption}>Доля от всех расходов</span>
+                  <span className={styles.caption}>{formatShare(share)}</span>
+                </div>
                 <div className={styles.captionRow}>
                   <span className={`${styles.status} ${styles[statusTone]}`}>{statusLabel}</span>
                   <span className={styles.caption}>{limitLabel}</span>
