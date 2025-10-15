@@ -3,6 +3,7 @@ import './networkTls';
 import { fetch as undiciFetch } from 'undici';
 
 import { prisma } from './prisma';
+import { ALL_ACCOUNTS_ID, ALL_ACCOUNTS_LABEL } from './investAccounts';
 
 const TBANK_API_INVALID_BASE_URL_CODE = 'TBANK_API_INVALID_BASE_URL';
 const TBANK_API_PACKAGE = 'tinkoff.public.invest.api.contract.v1';
@@ -165,6 +166,12 @@ type AccountPreview = {
   name: string | null;
   status: string | null;
   accessLevel: string | null;
+};
+
+type ResolvedAccount = {
+  accountId: string | null;
+  brokerAccountType: string | null;
+  requestAccountId?: string;
 };
 
 type NormalizedPosition = {
@@ -662,7 +669,21 @@ async function enrichInstrumentMetadata(
   return cache;
 }
 
-function resolveAccount(accounts: AccountPreview[], requestedId?: string) {
+function resolveAccount(accounts: AccountPreview[], requestedId?: string): ResolvedAccount {
+  if (requestedId === ALL_ACCOUNTS_ID) {
+    if (accounts.length === 0) {
+      throw Object.assign(new Error('Аккаунты инвестиций не найдены. Проверьте токен доступа.'), {
+        code: 'NO_ACCOUNTS',
+      });
+    }
+
+    return {
+      accountId: ALL_ACCOUNTS_ID,
+      brokerAccountType: ALL_ACCOUNTS_LABEL,
+      requestAccountId: undefined,
+    };
+  }
+
   if (requestedId) {
     const match = accounts.find((account) => account.brokerAccountId === requestedId);
     if (!match) {
@@ -672,7 +693,11 @@ function resolveAccount(accounts: AccountPreview[], requestedId?: string) {
         accounts: available,
       });
     }
-    return match;
+    return {
+      accountId: match.brokerAccountId,
+      brokerAccountType: match.brokerAccountType ?? null,
+      requestAccountId: match.brokerAccountId,
+    };
   }
 
   if (accounts.length === 0) {
@@ -682,7 +707,12 @@ function resolveAccount(accounts: AccountPreview[], requestedId?: string) {
   }
 
   if (accounts.length === 1) {
-    return accounts[0];
+    const [single] = accounts;
+    return {
+      accountId: single.brokerAccountId,
+      brokerAccountType: single.brokerAccountType ?? null,
+      requestAccountId: single.brokerAccountId,
+    };
   }
 
   throw Object.assign(new Error('Нужно выбрать счёт для подключения'), {
@@ -716,21 +746,22 @@ export async function upsertPortfolioConnection({
   const accounts = await fetchAccountsPreview(token);
   const resolvedAccount = resolveAccount(accounts, accountId ?? undefined);
 
-  await callRest<PortfolioResponse>(token, 'OperationsService', 'GetPortfolio', {
-    accountId: resolvedAccount.brokerAccountId,
-  });
+  const accountPayload =
+    resolvedAccount.requestAccountId != null ? { accountId: resolvedAccount.requestAccountId } : {};
+
+  await callRest<PortfolioResponse>(token, 'OperationsService', 'GetPortfolio', accountPayload);
 
   const connection = await prisma.portfolioConnection.upsert({
     where: { userId },
     update: {
       token,
-      accountId: resolvedAccount.brokerAccountId,
+      accountId: resolvedAccount.accountId,
       brokerAccountType: resolvedAccount.brokerAccountType,
     },
     create: {
       userId,
       token,
-      accountId: resolvedAccount.brokerAccountId,
+      accountId: resolvedAccount.accountId,
       brokerAccountType: resolvedAccount.brokerAccountType,
     },
   });
@@ -747,15 +778,14 @@ export async function syncTinkoffPortfolio(connectionId: string) {
   const accounts = await fetchAccountsPreview(connection.token);
   const resolvedAccount = resolveAccount(accounts, connection.accountId ?? undefined);
 
+  const accountPayload =
+    resolvedAccount.requestAccountId != null ? { accountId: resolvedAccount.requestAccountId } : {};
+
   const [portfolioResponse, positionsResponse, operationsResponse] = await Promise.all([
-    callRest<PortfolioResponse>(connection.token, 'OperationsService', 'GetPortfolio', {
-      accountId: resolvedAccount.brokerAccountId,
-    }),
-    callRest<PositionsResponse>(connection.token, 'OperationsService', 'GetPositions', {
-      accountId: resolvedAccount.brokerAccountId,
-    }),
+    callRest<PortfolioResponse>(connection.token, 'OperationsService', 'GetPortfolio', accountPayload),
+    callRest<PositionsResponse>(connection.token, 'OperationsService', 'GetPositions', accountPayload),
     callRest<OperationsResponse>(connection.token, 'OperationsService', 'GetOperations', {
-      accountId: resolvedAccount.brokerAccountId,
+      ...accountPayload,
       from: new Date(new Date().setFullYear(new Date().getFullYear() - 5)).toISOString(),
       to: new Date().toISOString(),
       state: 'OPERATION_STATE_EXECUTED',
