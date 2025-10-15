@@ -53,14 +53,24 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
     [expenses.data?.monthly],
   );
 
-  const monthlyBalances = useMemo(
+  const sortedMonthlyPoints = useMemo(
     () =>
-      monthlyPoints.map((point) => ({
-        date: point.date,
-        balance: point.income - point.expenses,
-      })),
+      [...monthlyPoints].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+      ),
     [monthlyPoints],
   );
+
+  const monthlyBalances = useMemo(() => {
+    let runningBalance = 0;
+    return sortedMonthlyPoints.map((point) => {
+      runningBalance += point.income - point.expenses;
+      return {
+        date: point.date,
+        balance: runningBalance,
+      };
+    });
+  }, [sortedMonthlyPoints]);
 
   const bestMonth = useMemo(() => {
     if (!monthlyBalances.length) {
@@ -123,7 +133,7 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
       </section>
 
       <section className={styles.gridSingle}>
-        <BalanceTrendChart data={monthlyPoints} />
+        <BalanceTrendChart data={sortedMonthlyPoints} />
       </section>
 
       <section className={styles.gridSingle}>

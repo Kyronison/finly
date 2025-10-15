@@ -4,6 +4,7 @@ import { formatISO, startOfMonth } from 'date-fns';
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { buildTimelineRange, enumerateMonths, formatMonthKey, resolvePeriod } from '@/lib/period';
+import { shouldIgnoreCategory } from '@/lib/financeFilters';
 
 const UNCATEGORIZED_CATEGORY_ID = 'uncategorized';
 
@@ -57,18 +58,25 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     })(),
   ]);
 
+  const filteredRawExpenses = rawExpenses.filter((expense) => !shouldIgnoreCategory(expense.category));
+  const filteredTimelineExpenses = timelineExpenses.filter(
+    (operation) => !shouldIgnoreCategory(operation.category),
+  );
+
   const totals = {
     income: 0,
     expenses: 0,
   };
 
-  rawExpenses.forEach((expense) => {
+  filteredRawExpenses.forEach((expense) => {
     if (expense.category?.type === 'INCOME') {
       totals.income += Number(expense.amount);
     } else {
       totals.expenses += Number(expense.amount);
     }
   });
+
+  const expenseOperations = filteredRawExpenses.filter((expense) => expense.category?.type !== 'INCOME');
 
   const monthlyTotals = new Map<
     string,
@@ -87,7 +95,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     }
   >();
 
-  timelineExpenses.forEach((operation) => {
+  filteredTimelineExpenses.forEach((operation) => {
     const monthKey = formatMonthKey(operation.date);
     const bucket =
       monthlyTotals.get(monthKey) ?? {
@@ -148,7 +156,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     });
   });
 
-  const expenses = rawExpenses.map((item) => ({
+  const expenses = expenseOperations.map((item) => ({
     ...item,
     amount: Number(item.amount),
   }));

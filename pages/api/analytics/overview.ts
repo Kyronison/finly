@@ -3,6 +3,7 @@ import { endOfMonth, formatISO, parseISO, startOfMonth, subDays } from 'date-fns
 
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { shouldIgnoreCategory } from '@/lib/financeFilters';
 
 function parseBoundary(value?: string) {
   if (!value) return null;
@@ -64,6 +65,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const daySet = new Set<string>();
 
   expenses.forEach((expense) => {
+    if (shouldIgnoreCategory(expense.category)) {
+      return;
+    }
+
     const amount = Number(expense.amount);
     const key = expense.categoryId ?? 'uncategorized';
     const entry = byCategory.get(key);

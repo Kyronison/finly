@@ -4,6 +4,7 @@ import { endOfMonth, parseISO, startOfMonth } from 'date-fns';
 
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
+import { shouldIgnoreCategory } from '@/lib/financeFilters';
 
 function parseBoundary(value?: string) {
   if (!value) return null;
@@ -82,6 +83,8 @@ async function getCategories(req: NextApiRequest, res: NextApiResponse) {
     }),
   ]);
 
+  const filteredOperations = operations.filter((operation) => !shouldIgnoreCategory(operation.category));
+
   const usedCategoryIds = new Set(
     usageCounts
       .map((item) => item.categoryId)
@@ -102,7 +105,7 @@ async function getCategories(req: NextApiRequest, res: NextApiResponse) {
   }
 
   const totalsByCategory = new Map<string, { income: number; expenses: number }>();
-  operations.forEach((operation) => {
+  filteredOperations.forEach((operation) => {
     if (!operation.categoryId || !operation.category) return;
     const amount = Number(operation.amount);
     const bucket = totalsByCategory.get(operation.categoryId) ?? { income: 0, expenses: 0 };
