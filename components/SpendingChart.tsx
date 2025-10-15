@@ -22,13 +22,6 @@ interface ExpenseBreakdownItem {
   amount: number;
 }
 
-interface DataPoint {
-  date: string;
-  income: number;
-  expenses: number;
-  expenseBreakdown: ExpenseBreakdownItem[];
-}
-
 interface Category {
   id: string;
   name: string;
@@ -37,7 +30,11 @@ interface Category {
 }
 
 interface Props {
-  data: DataPoint[];
+  data: Array<{
+    date: string;
+    expenses: number;
+    expenseBreakdown: ExpenseBreakdownItem[];
+  }>;
   categories: Category[];
 }
 
@@ -48,9 +45,7 @@ export function SpendingChart({ data, categories }: Props) {
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
 
-  const firstMeaningfulIndex = sorted.findIndex(
-    (point) => point.income !== 0 || point.expenses !== 0,
-  );
+  const firstMeaningfulIndex = sorted.findIndex((point) => point.expenses !== 0);
 
   const prepared =
     firstMeaningfulIndex > 0 ? sorted.slice(firstMeaningfulIndex) : sorted;
@@ -60,8 +55,9 @@ export function SpendingChart({ data, categories }: Props) {
     const labelRaw = format(parsed, 'LLLL yyyy', { locale: ru });
     const label = labelRaw.charAt(0).toUpperCase() + labelRaw.slice(1);
     return {
-      ...point,
       label,
+      expenses: point.expenses,
+      expenseBreakdown: point.expenseBreakdown,
     };
   });
 
@@ -155,27 +151,21 @@ export function SpendingChart({ data, categories }: Props) {
 
   const lastSix = formatted.slice(-6);
 
-  const average = (points: typeof formatted, key: 'income' | 'expenses') => {
+  const average = (points: typeof formatted) => {
     if (points.length === 0) {
       return 0;
     }
 
-    const total = points.reduce((sum, point) => sum + point[key], 0);
+    const total = points.reduce((sum, point) => sum + point.expenses, 0);
     return total / points.length;
   };
 
-  const averageExpenses = average(lastSix, 'expenses');
-  const averageIncome = average(lastSix, 'income');
+  const averageExpenses = average(lastSix);
 
   const latestPoint = formatted[formatted.length - 1];
   const previousPoint = formatted[formatted.length - 2];
 
-  const expensesChange =
-    latestPoint && previousPoint
-      ? latestPoint.expenses - previousPoint.expenses
-      : 0;
-  const incomeChange =
-    latestPoint && previousPoint ? latestPoint.income - previousPoint.income : 0;
+  const expensesChange = latestPoint && previousPoint ? latestPoint.expenses - previousPoint.expenses : 0;
 
   const formatCurrency = (value: number) =>
     `${Math.round(value).toLocaleString('ru-RU')} ₽`;
@@ -198,8 +188,8 @@ export function SpendingChart({ data, categories }: Props) {
     <div className={styles.container}>
       <header className={styles.header}>
         <div>
-          <h3>Ритм доходов и расходов</h3>
-          <p>Сравните помесячные поступления и траты за выбранный период</p>
+          <h3>Динамика расходов по категориям</h3>
+          <p>Смотрите, как меняются траты по месяцам и категориям</p>
         </div>
       </header>
       <div className={styles.summary}>
@@ -216,21 +206,6 @@ export function SpendingChart({ data, categories }: Props) {
             }`}
           >
             {formatChange(expensesChange)} к прошлому месяцу
-          </span>
-        </div>
-        <div className={styles.statCard}>
-          <span className={styles.statLabel}>Средние доходы (6 мес.)</span>
-          <span className={styles.statValue}>{formatCurrency(averageIncome)}</span>
-          <span
-            className={`${styles.statChange} ${
-              incomeChange > 0
-                ? styles.statChangePositive
-                : incomeChange < 0
-                ? styles.statChangeNegative
-                : ''
-            }`}
-          >
-            {formatChange(incomeChange)} к прошлому месяцу
           </span>
         </div>
       </div>
@@ -280,7 +255,6 @@ export function SpendingChart({ data, categories }: Props) {
                 name={category.name}
               />
             ))}
-            <Bar dataKey="income" fill="#22c55e" radius={[6, 6, 0, 0]} name="Доходы" />
           </BarChart>
         </ResponsiveContainer>
       </div>

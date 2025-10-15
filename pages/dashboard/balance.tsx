@@ -8,6 +8,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { MetricCard } from '@/components/MetricCard';
 import { BalanceTrendChart } from '@/components/BalanceTrendChart';
+import { ExpenseImport, IncomeImport, TBankImport } from '@/components/ExpenseImport';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { getAuthenticatedUser, type AuthenticatedUser } from '@/lib/getAuthenticatedUser';
 import styles from '@/styles/Dashboard.module.css';
@@ -43,6 +44,7 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
     canNavigateForward,
     analytics,
     expenses,
+    handleOperationsChanged,
   } = useDashboardData();
 
   const totalIncome = analytics.data?.totals?.income ?? 0;
@@ -53,14 +55,24 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
     [expenses.data?.monthly],
   );
 
-  const monthlyBalances = useMemo(
+  const sortedMonthlyPoints = useMemo(
     () =>
-      monthlyPoints.map((point) => ({
-        date: point.date,
-        balance: point.income - point.expenses,
-      })),
+      [...monthlyPoints].sort(
+        (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+      ),
     [monthlyPoints],
   );
+
+  const monthlyBalances = useMemo(() => {
+    let runningBalance = 0;
+    return sortedMonthlyPoints.map((point) => {
+      runningBalance += point.income - point.expenses;
+      return {
+        date: point.date,
+        balance: runningBalance,
+      };
+    });
+  }, [sortedMonthlyPoints]);
 
   const bestMonth = useMemo(() => {
     if (!monthlyBalances.length) {
@@ -123,19 +135,24 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
       </section>
 
       <section className={styles.gridSingle}>
-        <BalanceTrendChart data={monthlyPoints} />
+        <BalanceTrendChart data={sortedMonthlyPoints} />
+      </section>
+
+      <section className={styles.gridSingle}>
+        <div className={styles.balanceSummaryCard}>
+          <h3>Соотношение доходов и расходов</h3>
+          <p>
+            Доходы: {formatCurrency(totalIncome)} • Расходы: {formatCurrency(totalExpenses)} • Баланс:{' '}
+            {formatCurrency(balance)}
+          </p>
+        </div>
       </section>
 
       <section className={styles.gridSingle}>
         <div className={styles.importGrid}>
-          <div className={styles.balanceSummaryCard}>
-            <h3>Соотношение доходов и расходов</h3>
-            <p>
-              Доходы: {formatCurrency(totalIncome)} • Расходы: {formatCurrency(totalExpenses)} • Баланс:
-              {' '}
-              {formatCurrency(balance)}
-            </p>
-          </div>
+          <TBankImport onImported={handleOperationsChanged} />
+          <ExpenseImport onImported={handleOperationsChanged} />
+          <IncomeImport onImported={handleOperationsChanged} />
         </div>
       </section>
     </DashboardLayout>

@@ -11,7 +11,6 @@ import { CategoryForm } from '@/components/CategoryForm';
 import { CategoryList } from '@/components/CategoryList';
 import { StreakCard } from '@/components/StreakCard';
 import { ExpenseForm } from '@/components/ExpenseForm';
-import { ExpenseImport, TBankImport } from '@/components/ExpenseImport';
 import { ExpenseTable } from '@/components/ExpenseTable';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { getAuthenticatedUser, type AuthenticatedUser } from '@/lib/getAuthenticatedUser';
@@ -130,13 +129,6 @@ export default function ExpensesDashboardPage({ user }: DashboardPageProps) {
 
       <section className={styles.gridTwoColumn}>
         <ExpenseForm categories={expenseCategories} onCreated={handleOperationsChanged} />
-      </section>
-
-      <section className={styles.gridSingle}>
-        <div className={styles.importGrid}>
-          <ExpenseImport onImported={handleOperationsChanged} />
-          <TBankImport onImported={handleOperationsChanged} />
-        </div>
       </section>
 
       <section className={styles.gridSingle}>
