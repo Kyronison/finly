@@ -27,9 +27,17 @@ interface Props {
   onChanged: () => void;
   periodStart?: string;
   periodEnd?: string;
+  allowUncategorized?: boolean;
 }
 
-export function ExpenseTable({ expenses, categories, onChanged, periodStart, periodEnd }: Props) {
+export function ExpenseTable({
+  expenses,
+  categories,
+  onChanged,
+  periodStart,
+  periodEnd,
+  allowUncategorized = true,
+}: Props) {
   const [error, setError] = useState('');
   const [exportError, setExportError] = useState('');
   const [message, setMessage] = useState('');
@@ -97,19 +105,32 @@ export function ExpenseTable({ expenses, categories, onChanged, periodStart, per
     const currentIndex = expense.category
       ? categories.findIndex((category) => category.id === expense.category?.id) + 1
       : 0;
-    const input = window.prompt(
-      `Выберите категорию (номер). 0 — без категории.\n${options}`,
-      currentIndex.toString(),
-    );
+    const lines = [`Выберите категорию (номер).${allowUncategorized ? ' 0 — без категории.' : ''}`];
+    if (options) {
+      lines.push(options);
+    }
+    const input = window.prompt(lines.join('\n'), currentIndex.toString());
     if (input === null) return;
 
     const selected = Number(input);
-    if (Number.isNaN(selected) || selected < 0 || selected > categories.length) {
+    if (
+      Number.isNaN(selected) ||
+      selected < (allowUncategorized ? 0 : 1) ||
+      selected > categories.length
+    ) {
       setError('Некорректный выбор');
       return;
     }
 
     const categoryId = selected === 0 ? null : categories[selected - 1]?.id;
+    if (!allowUncategorized && categoryId === null) {
+      setError('Категория обязательна для этой операции');
+      return;
+    }
+    if (selected !== 0 && !categoryId) {
+      setError('Категория не найдена');
+      return;
+    }
 
     try {
       await updateExpense(expense.id, { categoryId });
@@ -229,7 +250,9 @@ export function ExpenseTable({ expenses, categories, onChanged, periodStart, per
             <span>{format(new Date(expense.date), 'd MMM', { locale: ru })}</span>
             <span>{expense.description || '—'}</span>
             <span>{expense.category?.name ?? 'Без категории'}</span>
-            <span className={styles.amountCol}>{expense.amount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}</span>
+            <span className={styles.amountCol}>
+              {expense.amount.toLocaleString('ru-RU', { style: 'currency', currency: 'RUB' })}
+            </span>
             <span className={styles.actionsCol}>
               <button type="button" onClick={() => handleEdit(expense)}>
                 Изменить
@@ -251,10 +274,12 @@ export function ExpenseTable({ expenses, categories, onChanged, periodStart, per
         <div className={styles.footerInfo}>
           <span>
             {displayedExpenses.length > 0
-              ? `Показаны последние ${displayedExpenses.length} операций`
+              ? `Показано операций: ${displayedExpenses.length} из ${expenseOnly.length}`
               : 'Нет операций для отображения'}
           </span>
-          {hasMoreExpenses ? <span className={styles.caption}>Выгрузите файл, чтобы посмотреть полный список.</span> : null}
+          {hasMoreExpenses ? (
+            <span className={styles.caption}>Выгрузите файл, чтобы посмотреть полный список.</span>
+          ) : null}
         </div>
         <div className={styles.footerActions}>
           <div className={styles.exportControls}>

@@ -34,9 +34,7 @@ export default function ExpensesDashboardPage({ user }: DashboardPageProps) {
     canNavigateForward,
     analytics,
     expenses,
-    chartCategories,
     expenseCategories,
-    allCategories,
     handleOperationsChanged,
   } = useDashboardData();
 
@@ -107,7 +105,7 @@ export default function ExpensesDashboardPage({ user }: DashboardPageProps) {
       </section>
 
       <section className={styles.gridSingle}>
-        <SpendingChart data={monthlyPoints} categories={chartCategories} />
+        <SpendingChart data={monthlyPoints} />
       </section>
 
       <section className={styles.gridSingle}>
@@ -115,7 +113,7 @@ export default function ExpensesDashboardPage({ user }: DashboardPageProps) {
       </section>
 
       <section className={styles.gridTwoColumn}>
-        <CategoryForm onCreated={handleOperationsChanged} />
+        <CategoryForm mode="EXPENSE" onCreated={handleOperationsChanged} />
         <StreakCard streak={analytics.data?.streak ?? 0} />
       </section>
 
@@ -134,7 +132,8 @@ export default function ExpensesDashboardPage({ user }: DashboardPageProps) {
       <section className={styles.gridSingle}>
         <ExpenseTable
           expenses={expenses.data?.expenses ?? []}
-          categories={allCategories}
+          categories={expenseCategories}
+          allowUncategorized
           onChanged={handleOperationsChanged}
           periodStart={expenses.data?.periodStart}
           periodEnd={expenses.data?.periodEnd}

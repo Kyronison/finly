@@ -1,9 +1,10 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { CategoryType } from '@prisma/client';
 import { formatISO, startOfMonth } from 'date-fns';
 
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-import { buildTimelineRange, enumerateMonths, formatMonthKey, resolvePeriod } from '@/lib/period';
+import { enumerateMonths, formatMonthKey, resolvePeriod } from '@/lib/period';
 import { shouldIgnoreCategory } from '@/lib/financeFilters';
 
 const UNCATEGORIZED_CATEGORY_ID = 'uncategorized';
@@ -34,34 +35,16 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     typeof req.query.end === 'string' ? req.query.end : undefined,
   );
 
-  const [rawExpenses, timelineExpenses] = await Promise.all([
-    prisma.expense.findMany({
-      where: {
-        userId,
-        date: { gte: start, lte: end },
-      },
-      include: { category: true },
-      orderBy: { date: 'desc' },
-    }),
-    (async () => {
-      const { from, to } = buildTimelineRange(end);
-      return prisma.expense.findMany({
-        where: {
-          userId,
-          date: {
-            gte: from,
-            lte: to,
-          },
-        },
-        include: { category: true },
-      });
-    })(),
-  ]);
+  const rawExpenses = await prisma.expense.findMany({
+    where: {
+      userId,
+      date: { gte: start, lte: end },
+    },
+    include: { category: true },
+    orderBy: { date: 'desc' },
+  });
 
   const filteredRawExpenses = rawExpenses.filter((expense) => !shouldIgnoreCategory(expense.category));
-  const filteredTimelineExpenses = timelineExpenses.filter(
-    (operation) => !shouldIgnoreCategory(operation.category),
-  );
 
   const totals = {
     income: 0,
@@ -95,7 +78,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     }
   >();
 
-  filteredTimelineExpenses.forEach((operation) => {
+  filteredRawExpenses.forEach((operation) => {
     const monthKey = formatMonthKey(operation.date);
     const bucket =
       monthlyTotals.get(monthKey) ?? {
@@ -125,7 +108,6 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     monthlyTotals.set(monthKey, bucket);
   });
 
-  const { from: timelineStart, to: timelineEnd } = buildTimelineRange(end);
   const monthly: Array<{
     date: string;
     income: number;
@@ -138,7 +120,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     }>;
   }> = [];
 
-  enumerateMonths(timelineStart, timelineEnd).forEach((cursor) => {
+  enumerateMonths(start, end).forEach((cursor) => {
     const monthKey = formatMonthKey(cursor);
     const bucket = monthlyTotals.get(monthKey);
     monthly.push({
@@ -174,11 +156,20 @@ async function createExpense(req: NextApiRequest, res: NextApiResponse) {
   const userId = requireAuth(req, res);
   if (!userId) return;
 
-  const { amount, categoryId, description, date } = req.body ?? {};
+  const { amount, categoryId, description, date, type } = req.body ?? {};
   const numericAmount = Number(amount);
+
+  const normalizedType =
+    typeof type === 'string' && type.toUpperCase() === 'INCOME'
+      ? CategoryType.INCOME
+      : CategoryType.EXPENSE;
 
   if (!numericAmount || Number.isNaN(numericAmount) || numericAmount <= 0) {
     return res.status(400).json({ message: 'Сумма должна быть больше 0' });
+  }
+
+  if (normalizedType === CategoryType.INCOME && !categoryId) {
+    return res.status(400).json({ message: 'Доходы должны быть привязаны к категории' });
   }
 
   let parsedDate: Date;
@@ -195,6 +186,12 @@ async function createExpense(req: NextApiRequest, res: NextApiResponse) {
     const category = await prisma.category.findFirst({ where: { id: categoryId, userId } });
     if (!category) {
       return res.status(404).json({ message: 'Категория не найдена' });
+    }
+
+    if (category.type !== normalizedType) {
+      return res
+        .status(400)
+        .json({ message: 'Категория не соответствует выбранному типу операции' });
     }
   }
 

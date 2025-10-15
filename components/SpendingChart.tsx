@@ -2,11 +2,9 @@ import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import {
-  Bar,
-  BarChart,
-  Brush,
+  Area,
+  AreaChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -15,40 +13,21 @@ import {
 
 import styles from './SpendingChart.module.css';
 
-interface ExpenseBreakdownItem {
-  id: string;
-  name: string;
-  color: string | null;
-  amount: number;
-}
-
-interface Category {
-  id: string;
-  name: string;
-  type: 'INCOME' | 'EXPENSE';
-  color?: string | null;
-}
-
 interface Props {
   data: Array<{
     date: string;
     expenses: number;
-    expenseBreakdown: ExpenseBreakdownItem[];
   }>;
-  categories: Category[];
 }
 
-const UNCATEGORIZED_CATEGORY_ID = 'uncategorized';
-
-export function SpendingChart({ data, categories }: Props) {
-  const sorted = [...data].sort(
-    (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+export function SpendingChart({ data }: Props) {
+  const sorted = useMemo(
+    () => [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [data],
   );
 
   const firstMeaningfulIndex = sorted.findIndex((point) => point.expenses !== 0);
-
-  const prepared =
-    firstMeaningfulIndex > 0 ? sorted.slice(firstMeaningfulIndex) : sorted;
+  const prepared = firstMeaningfulIndex > 0 ? sorted.slice(firstMeaningfulIndex) : sorted;
 
   const formatted = prepared.map((point) => {
     const parsed = new Date(point.date);
@@ -57,118 +36,24 @@ export function SpendingChart({ data, categories }: Props) {
     return {
       label,
       expenses: point.expenses,
-      expenseBreakdown: point.expenseBreakdown,
-    };
-  });
-
-  const expenseCategories = useMemo(
-    () => categories.filter((category) => category.type === 'EXPENSE'),
-    [categories],
-  );
-
-  const expenseCategoryMap = useMemo(
-    () => new Map(expenseCategories.map((category) => [category.id, category])),
-    [expenseCategories],
-  );
-
-  const fallbackColors = useMemo(
-    () => [
-      '#f87171',
-      '#fb923c',
-      '#facc15',
-      '#34d399',
-      '#60a5fa',
-      '#a855f7',
-      '#f472b6',
-      '#f97316',
-      '#2dd4bf',
-      '#f43f5e',
-    ],
-    [],
-  );
-
-  const breakdownLookup = new Map<
-    string,
-    {
-      name: string;
-      color: string | null;
-    }
-  >();
-
-  formatted.forEach((point) => {
-    point.expenseBreakdown.forEach((item) => {
-      if (!breakdownLookup.has(item.id)) {
-        breakdownLookup.set(item.id, { name: item.name, color: item.color });
-      }
-    });
-  });
-
-  const orderedCategoryIds: string[] = [];
-
-  expenseCategories.forEach((category) => {
-    if (breakdownLookup.has(category.id) && !orderedCategoryIds.includes(category.id)) {
-      orderedCategoryIds.push(category.id);
-    }
-  });
-
-  breakdownLookup.forEach((_, id) => {
-    if (!orderedCategoryIds.includes(id)) {
-      orderedCategoryIds.push(id);
-    }
-  });
-
-  const categoryMeta = orderedCategoryIds.map((id, index) => {
-    const breakdown = breakdownLookup.get(id);
-    const category = expenseCategoryMap.get(id);
-    const color =
-      breakdown?.color ??
-      category?.color ??
-      fallbackColors[index % fallbackColors.length];
-    const name =
-      breakdown?.name ??
-      category?.name ??
-      (id === UNCATEGORIZED_CATEGORY_ID ? 'Без категории' : 'Другая категория');
-
-    return {
-      id,
-      name,
-      color,
-      dataKey: `category_${id}`,
-    };
-  });
-
-  const chartData = formatted.map((point) => {
-    const breakdownMap = new Map(point.expenseBreakdown.map((item) => [item.id, item.amount]));
-    const categoryValues = Object.fromEntries(
-      categoryMeta.map(({ id, dataKey }) => [dataKey, breakdownMap.get(id) ?? 0]),
-    );
-
-    return {
-      ...point,
-      ...categoryValues,
     };
   });
 
   const lastSix = formatted.slice(-6);
 
-  const average = (points: typeof formatted) => {
-    if (points.length === 0) {
+  const averageExpenses = useMemo(() => {
+    if (lastSix.length === 0) {
       return 0;
     }
-
-    const total = points.reduce((sum, point) => sum + point.expenses, 0);
-    return total / points.length;
-  };
-
-  const averageExpenses = average(lastSix);
+    const total = lastSix.reduce((sum, point) => sum + point.expenses, 0);
+    return total / lastSix.length;
+  }, [lastSix]);
 
   const latestPoint = formatted[formatted.length - 1];
   const previousPoint = formatted[formatted.length - 2];
-
   const expensesChange = latestPoint && previousPoint ? latestPoint.expenses - previousPoint.expenses : 0;
 
-  const formatCurrency = (value: number) =>
-    `${Math.round(value).toLocaleString('ru-RU')} ₽`;
+  const formatCurrency = (value: number) => `${Math.round(value).toLocaleString('ru-RU')} ₽`;
 
   const formatChange = (value: number) => {
     if (!previousPoint) {
@@ -188,8 +73,8 @@ export function SpendingChart({ data, categories }: Props) {
     <div className={styles.container}>
       <header className={styles.header}>
         <div>
-          <h3>Динамика расходов по категориям</h3>
-          <p>Смотрите, как меняются траты по месяцам и категориям</p>
+          <h3>Динамика расходов</h3>
+          <p>Отслеживайте траты и контролируйте бюджет</p>
         </div>
       </header>
       <div className={styles.summary}>
@@ -211,8 +96,12 @@ export function SpendingChart({ data, categories }: Props) {
       </div>
       <div className={styles.chartWrapper}>
         <ResponsiveContainer width="100%" height={320}>
-          <BarChart data={chartData} margin={{ left: 0, right: 0, top: 20, bottom: 0 }} barGap={12}>
+          <AreaChart data={formatted} margin={{ left: 0, right: 0, top: 20, bottom: 0 }}>
             <defs>
+              <linearGradient id="expensesGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="5%" stopColor="#f97316" stopOpacity={0.4} />
+                <stop offset="95%" stopColor="#f97316" stopOpacity={0.05} />
+              </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
@@ -223,39 +112,24 @@ export function SpendingChart({ data, categories }: Props) {
               minTickGap={16}
             />
             <YAxis stroke="rgba(255,255,255,0.5)" tickLine={false} axisLine={false} width={60} />
-            <Brush
-              dataKey="label"
-              height={28}
-              stroke="rgba(255, 255, 255, 0.3)"
-              travellerWidth={10}
-              fill="rgba(255, 255, 255, 0.04)"
-            />
             <Tooltip
               contentStyle={{
                 background: 'rgba(10, 8, 18, 0.95)',
                 border: '1px solid rgba(255, 255, 255, 0.1)',
                 borderRadius: 12,
               }}
-              formatter={(value: number, name: string) => [
-                `${value.toLocaleString('ru-RU')} ₽`,
-                name,
-              ]}
+              formatter={(value: number) => [`${Math.round(value).toLocaleString('ru-RU')} ₽`, 'Расходы']}
               labelFormatter={(label) => label}
             />
-            <Legend wrapperStyle={{ paddingTop: 12 }} />
-            {categoryMeta.map((category, index) => (
-              <Bar
-                key={category.id}
-                dataKey={category.dataKey}
-                stackId="expenses"
-                fill={category.color}
-                radius={
-                  index === categoryMeta.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]
-                }
-                name={category.name}
-              />
-            ))}
-          </BarChart>
+            <Area
+              type="monotone"
+              dataKey="expenses"
+              stroke="#f97316"
+              fill="url(#expensesGradient)"
+              strokeWidth={2}
+              name="Расходы"
+            />
+          </AreaChart>
         </ResponsiveContainer>
       </div>
     </div>

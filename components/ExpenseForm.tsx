@@ -63,7 +63,13 @@ export function ExpenseForm({
       const response = await fetch('/api/expenses', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount: Number(amount), categoryId: categoryId || null, description, date }),
+        body: JSON.stringify({
+          amount: Number(amount),
+          categoryId: categoryId || null,
+          description,
+          date,
+          type: mode,
+        }),
       });
 
       if (!response.ok) {
