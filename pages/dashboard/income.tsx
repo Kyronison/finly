@@ -123,7 +123,7 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
       </section>
 
       <section className={styles.gridTwoColumn}>
-        <CategoryForm onCreated={handleOperationsChanged} />
+        <CategoryForm mode="INCOME" onCreated={handleOperationsChanged} />
         <ExpenseForm
           mode="INCOME"
           categories={incomeCategories}
