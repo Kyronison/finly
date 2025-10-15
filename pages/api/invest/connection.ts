@@ -8,6 +8,28 @@ import {
   syncTinkoffPortfolio,
   upsertPortfolioConnection,
 } from '@/lib/tbank';
+import { ALL_ACCOUNTS_ID, ALL_ACCOUNTS_LABEL } from '@/lib/investAccounts';
+
+function withAllAccountsOption(accounts: Awaited<ReturnType<typeof fetchAccountsPreview>>) {
+  if (accounts.length <= 1) {
+    return accounts;
+  }
+
+  if (accounts.some((account) => account.brokerAccountId === ALL_ACCOUNTS_ID)) {
+    return accounts;
+  }
+
+  return [
+    ...accounts,
+    {
+      brokerAccountId: ALL_ACCOUNTS_ID,
+      brokerAccountType: ALL_ACCOUNTS_LABEL,
+      name: ALL_ACCOUNTS_LABEL,
+      status: null,
+      accessLevel: null,
+    },
+  ];
+}
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
@@ -85,7 +107,7 @@ async function connect(req: NextApiRequest, res: NextApiResponse) {
     const code = getErrorCode(error);
 
     if (code === 'ACCOUNT_SELECTION_REQUIRED') {
-      const preview = await fetchAccountsPreview(token.trim());
+      const preview = withAllAccountsOption(await fetchAccountsPreview(token.trim()));
       return res.status(400).json({
         message: 'Выберите счёт для подключения',
         requiresAccountSelection: true,
@@ -94,7 +116,7 @@ async function connect(req: NextApiRequest, res: NextApiResponse) {
     }
 
     if (code === 'ACCOUNT_NOT_FOUND') {
-      const preview = await fetchAccountsPreview(token.trim());
+      const preview = withAllAccountsOption(await fetchAccountsPreview(token.trim()));
       return res.status(400).json({
         message: 'Указанный счёт не найден. Выберите один из доступных.',
         requiresAccountSelection: true,
