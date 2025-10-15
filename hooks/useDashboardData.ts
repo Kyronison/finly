@@ -92,9 +92,6 @@ export interface DashboardData {
       periodEnd?: string;
     }>
   >;
-  activeCategories: Category[];
-  allCategories: Category[];
-  chartCategories: Category[];
   expenseCategories: Category[];
   incomeCategories: Category[];
   handleOperationsChanged: () => void;
@@ -156,10 +153,6 @@ export function useDashboardData(): DashboardData {
     periodEnd?: string;
   }>(`/api/expenses?${periodQuery}`);
 
-  const activeCategories = useMemo(
-    () => categories.data?.categories ?? [],
-    [categories.data?.categories],
-  );
   const allCategories = useMemo(
     () => categories.data?.allCategories ?? categories.data?.categories ?? [],
     [categories.data?.allCategories, categories.data?.categories],
@@ -250,23 +243,6 @@ export function useDashboardData(): DashboardData {
     categories.mutate();
   }, [analytics, categories, expenses]);
 
-  const chartCategories = useMemo(() => {
-    if (!expenses.data?.monthly?.length) {
-      return activeCategories;
-    }
-
-    const usedCategoryIds = new Set<string>();
-    expenses.data.monthly.forEach((point) => {
-      point.expenseBreakdown.forEach((item) => {
-        if (item.id) {
-          usedCategoryIds.add(item.id);
-        }
-      });
-    });
-
-    return activeCategories.filter((category) => usedCategoryIds.has(category.id));
-  }, [activeCategories, expenses.data?.monthly]);
-
   return {
     timeframe,
     periodLabel,
@@ -276,9 +252,6 @@ export function useDashboardData(): DashboardData {
     analytics,
     categories,
     expenses,
-    activeCategories,
-    allCategories,
-    chartCategories,
     expenseCategories,
     incomeCategories,
     handleOperationsChanged,

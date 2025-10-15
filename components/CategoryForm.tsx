@@ -4,13 +4,18 @@ import styles from './CategoryForm.module.css';
 
 type CategoryType = 'INCOME' | 'EXPENSE';
 
+type Mode = 'ALL' | 'INCOME' | 'EXPENSE';
+
 interface Props {
   onCreated: () => void;
+  mode?: Mode;
 }
 
-export function CategoryForm({ onCreated }: Props) {
+export function CategoryForm({ onCreated, mode = 'ALL' }: Props) {
   const [name, setName] = useState('');
-  const [type, setType] = useState<CategoryType>('EXPENSE');
+  const [type, setType] = useState<CategoryType>(
+    mode === 'INCOME' ? 'INCOME' : 'EXPENSE',
+  );
   const [budget, setBudget] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -34,7 +39,7 @@ export function CategoryForm({ onCreated }: Props) {
 
       setName('');
       setBudget('');
-      setType('EXPENSE');
+      setType(mode === 'INCOME' ? 'INCOME' : 'EXPENSE');
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Ошибка');
@@ -49,13 +54,20 @@ export function CategoryForm({ onCreated }: Props) {
         <span>Название</span>
         <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Категория" required />
       </label>
-      <label className={styles.field}>
-        <span>Тип</span>
-        <select value={type} onChange={(event) => setType(event.target.value as CategoryType)}>
-          <option value="EXPENSE">Расход</option>
-          <option value="INCOME">Доход</option>
-        </select>
-      </label>
+      {mode === 'ALL' ? (
+        <label className={styles.field}>
+          <span>Тип</span>
+          <select value={type} onChange={(event) => setType(event.target.value as CategoryType)}>
+            <option value="EXPENSE">Расход</option>
+            <option value="INCOME">Доход</option>
+          </select>
+        </label>
+      ) : (
+        <div className={styles.field}>
+          <span>Тип</span>
+          <div className={styles.readonlyField}>{mode === 'INCOME' ? 'Доход' : 'Расход'}</div>
+        </div>
+      )}
       <label className={styles.field}>
         <span>Лимит в месяц, ₽</span>
         <input

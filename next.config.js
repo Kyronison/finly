@@ -8,6 +8,11 @@ const nextConfig = {
         hostname: 'invest-brands.cdn-tinkoff.ru',
         pathname: '/**',
       },
+      {
+        protocol: 'https',
+        hostname: 'beststocks.ru',
+        pathname: '/**',
+      },
     ],
   },
 };

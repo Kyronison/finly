@@ -25,6 +25,33 @@ interface Props {
   positions: PositionRow[];
 }
 
+const fallbackLogos: Record<string, { url: string; companyName: string }> = {
+  ROSN: {
+    url: 'https://beststocks.ru/api/file/stock/logos/RU:ROSN.png',
+    companyName: 'Роснефть',
+  },
+  RNFT: {
+    url: 'https://beststocks.ru/api/file/stock/logos/RU:RNFT.png',
+    companyName: 'Сургутнефтегаз',
+  },
+  TATN: {
+    url: 'https://beststocks.ru/api/file/stock/logos/RU:TATN.png',
+    companyName: 'Татнефть',
+  },
+  GAZP: {
+    url: 'https://beststocks.ru/api/file/stock/logos/RU:GAZP.png',
+    companyName: 'Газпром',
+  },
+  SBER: {
+    url: 'https://beststocks.ru/api/file/stock/logos/RU:SBER.png',
+    companyName: 'Сбер',
+  },
+  LKOH: {
+    url: 'https://beststocks.ru/api/file/stock/logos/RU:LKOH.png',
+    companyName: 'Лукойл',
+  },
+};
+
 const instrumentTypeLabels: Record<string, string> = {
   share: 'Акция',
   bond: 'Облигация',
@@ -40,20 +67,34 @@ function getInstrumentTypeLabel(type: string | null) {
   return instrumentTypeLabels[normalized] ?? type;
 }
 
-function getInstrumentLogoUrl(position: PositionRow) {
+function getInstrumentLogo(position: PositionRow) {
   const logoName = position.brandLogoName?.trim();
-  if (!logoName) return null;
+  if (logoName) {
+    const baseName = logoName.replace(/\.png$/i, '');
+    if (baseName) {
+      return {
+        url: `https://invest-brands.cdn-tinkoff.ru/${baseName}x160.png`,
+        label: position.name ?? position.ticker ?? position.figi,
+      };
+    }
+  }
 
-  const baseName = logoName.replace(/\.png$/i, '');
-  if (!baseName) return null;
+  const ticker = position.ticker?.trim().toUpperCase();
+  if (ticker && fallbackLogos[ticker]) {
+    return {
+      url: fallbackLogos[ticker].url,
+      label: fallbackLogos[ticker].companyName,
+    };
+  }
 
-  return `https://invest-brands.cdn-tinkoff.ru/${baseName}x160.png`;
+  return null;
 }
 
 function InstrumentLogo({ position }: { position: PositionRow }) {
   const [showImage, setShowImage] = useState(true);
-  const instrumentName = position.name ?? position.ticker ?? position.figi;
-  const logoUrl = getInstrumentLogoUrl(position);
+  const logo = getInstrumentLogo(position);
+  const instrumentName = logo?.label ?? position.name ?? position.ticker ?? position.figi;
+  const logoUrl = logo?.url;
 
   const fallbackLetters = (instrumentName ?? '—')
     .replace(/[^A-Za-zА-Яа-я0-9]/g, '')
