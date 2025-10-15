@@ -245,6 +245,21 @@ export default function Dashboard({ user }: DashboardProps) {
     categories.mutate();
   }, [analytics, categories, expenses]);
 
+  const chartCategories = useMemo(() => {
+    const usedCategoryIds = new Set<string>();
+    (expenses.data?.monthly ?? []).forEach((point) => {
+      point.expenseBreakdown.forEach((item) => {
+        if (item.id) {
+          usedCategoryIds.add(item.id);
+        }
+      });
+    });
+
+    return (categories.data?.categories ?? []).filter((category) =>
+      usedCategoryIds.has(category.id),
+    );
+  }, [categories.data?.categories, expenses.data?.monthly]);
+
   return (
     <DashboardLayout user={user} onLogout={handleLogout}>
       <div className={styles.headerRow}>
@@ -313,10 +328,7 @@ export default function Dashboard({ user }: DashboardProps) {
       </section>
 
       <section className={styles.gridSingle}>
-        <SpendingChart
-          data={expenses.data?.monthly ?? []}
-          categories={categories.data?.categories ?? []}
-        />
+        <SpendingChart data={expenses.data?.monthly ?? []} categories={chartCategories} />
       </section>
 
       <section className={styles.gridSingle}>
