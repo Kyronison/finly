@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import {
@@ -14,17 +15,35 @@ import {
 
 import styles from './SpendingChart.module.css';
 
+interface ExpenseBreakdownItem {
+  id: string;
+  name: string;
+  color: string | null;
+  amount: number;
+}
+
 interface DataPoint {
   date: string;
   income: number;
   expenses: number;
+  expenseBreakdown: ExpenseBreakdownItem[];
+}
+
+interface Category {
+  id: string;
+  name: string;
+  type: 'INCOME' | 'EXPENSE';
+  color?: string | null;
 }
 
 interface Props {
   data: DataPoint[];
+  categories: Category[];
 }
 
-export function SpendingChart({ data }: Props) {
+const UNCATEGORIZED_CATEGORY_ID = 'uncategorized';
+
+export function SpendingChart({ data, categories }: Props) {
   const sorted = [...data].sort(
     (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
   );
@@ -43,6 +62,94 @@ export function SpendingChart({ data }: Props) {
     return {
       ...point,
       label,
+    };
+  });
+
+  const expenseCategories = useMemo(
+    () => categories.filter((category) => category.type === 'EXPENSE'),
+    [categories],
+  );
+
+  const expenseCategoryMap = useMemo(
+    () => new Map(expenseCategories.map((category) => [category.id, category])),
+    [expenseCategories],
+  );
+
+  const fallbackColors = useMemo(
+    () => [
+      '#f87171',
+      '#fb923c',
+      '#facc15',
+      '#34d399',
+      '#60a5fa',
+      '#a855f7',
+      '#f472b6',
+      '#f97316',
+      '#2dd4bf',
+      '#f43f5e',
+    ],
+    [],
+  );
+
+  const breakdownLookup = new Map<
+    string,
+    {
+      name: string;
+      color: string | null;
+    }
+  >();
+
+  formatted.forEach((point) => {
+    point.expenseBreakdown.forEach((item) => {
+      if (!breakdownLookup.has(item.id)) {
+        breakdownLookup.set(item.id, { name: item.name, color: item.color });
+      }
+    });
+  });
+
+  const orderedCategoryIds: string[] = [];
+
+  expenseCategories.forEach((category) => {
+    if (breakdownLookup.has(category.id) && !orderedCategoryIds.includes(category.id)) {
+      orderedCategoryIds.push(category.id);
+    }
+  });
+
+  breakdownLookup.forEach((_, id) => {
+    if (!orderedCategoryIds.includes(id)) {
+      orderedCategoryIds.push(id);
+    }
+  });
+
+  const categoryMeta = orderedCategoryIds.map((id, index) => {
+    const breakdown = breakdownLookup.get(id);
+    const category = expenseCategoryMap.get(id);
+    const color =
+      breakdown?.color ??
+      category?.color ??
+      fallbackColors[index % fallbackColors.length];
+    const name =
+      breakdown?.name ??
+      category?.name ??
+      (id === UNCATEGORIZED_CATEGORY_ID ? 'Без категории' : 'Другая категория');
+
+    return {
+      id,
+      name,
+      color,
+      dataKey: `category_${id}`,
+    };
+  });
+
+  const chartData = formatted.map((point) => {
+    const breakdownMap = new Map(point.expenseBreakdown.map((item) => [item.id, item.amount]));
+    const categoryValues = Object.fromEntries(
+      categoryMeta.map(({ id, dataKey }) => [dataKey, breakdownMap.get(id) ?? 0]),
+    );
+
+    return {
+      ...point,
+      ...categoryValues,
     };
   });
 
@@ -129,7 +236,7 @@ export function SpendingChart({ data }: Props) {
       </div>
       <div className={styles.chartWrapper}>
         <ResponsiveContainer width="100%" height={320}>
-          <BarChart data={formatted} margin={{ left: 0, right: 0, top: 20, bottom: 0 }} barGap={12}>
+          <BarChart data={chartData} margin={{ left: 0, right: 0, top: 20, bottom: 0 }} barGap={12}>
             <defs>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
@@ -154,18 +261,26 @@ export function SpendingChart({ data }: Props) {
                 border: '1px solid rgba(255, 255, 255, 0.1)',
                 borderRadius: 12,
               }}
-              formatter={(value: number, name: string) => {
-                const title = name === 'expenses' ? 'Расходы' : 'Доходы';
-                return [`${value.toLocaleString('ru-RU')} ₽`, title];
-              }}
+              formatter={(value: number, name: string) => [
+                `${value.toLocaleString('ru-RU')} ₽`,
+                name,
+              ]}
               labelFormatter={(label) => label}
             />
-            <Legend
-              wrapperStyle={{ paddingTop: 12 }}
-              formatter={(value) => (value === 'expenses' ? 'Расходы' : 'Доходы')}
-            />
-            <Bar dataKey="expenses" fill="#ef4444" radius={[6, 6, 0, 0]} name="expenses" />
-            <Bar dataKey="income" fill="#22c55e" radius={[6, 6, 0, 0]} name="income" />
+            <Legend wrapperStyle={{ paddingTop: 12 }} />
+            {categoryMeta.map((category, index) => (
+              <Bar
+                key={category.id}
+                dataKey={category.dataKey}
+                stackId="expenses"
+                fill={category.color}
+                radius={
+                  index === categoryMeta.length - 1 ? [6, 6, 0, 0] : [0, 0, 0, 0]
+                }
+                name={category.name}
+              />
+            ))}
+            <Bar dataKey="income" fill="#22c55e" radius={[6, 6, 0, 0]} name="Доходы" />
           </BarChart>
         </ResponsiveContainer>
       </div>
