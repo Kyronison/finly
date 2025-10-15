@@ -102,6 +102,12 @@
   margin-bottom: 32px;
 }
 
+.importGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+}
+
 @media (max-width: 768px) {
   .headerRow {
     flex-direction: column;

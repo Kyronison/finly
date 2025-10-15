@@ -14,11 +14,23 @@
   gap: 4px;
 }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .title {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
   color: #fff;
+}
+
+.icon {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
 }
 
 .caption {
@@ -75,4 +87,9 @@
 
 .summary strong {
   color: #fff;
+}
+
+.muted {
+  color: rgba(255, 255, 255, 0.6);
+  font-weight: 400;
 }
