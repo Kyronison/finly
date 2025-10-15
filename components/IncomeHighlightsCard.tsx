@@ -16,11 +16,14 @@ function formatCurrency(value: number): string {
 }
 
 function formatShare(amount: number, total: number): string {
-  if (total === 0) {
+  const normalizedTotal = Math.abs(total);
+  const normalizedAmount = Math.abs(amount);
+
+  if (normalizedTotal === 0) {
     return '0%';
   }
 
-  const share = (amount / total) * 100;
+  const share = (normalizedAmount / normalizedTotal) * 100;
   if (share === 0) return '0%';
   if (share < 1) return '<1%';
   return `${share.toFixed(share >= 10 ? 0 : 1)}%`;

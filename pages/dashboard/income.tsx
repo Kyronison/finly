@@ -39,15 +39,11 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
   } = useDashboardData();
 
   const totalIncome = analytics.data?.totals?.income ?? 0;
-  const monthlyPoints = useMemo(
-    () => expenses.data?.monthly ?? [],
-    [expenses.data?.monthly],
-  );
-  const monthsWithIncome = monthlyPoints.filter((point) => point.income > 0);
-  const averageIncome =
-    monthsWithIncome.length === 0
-      ? 0
-      : monthsWithIncome.reduce((sum, point) => sum + point.income, 0) / monthsWithIncome.length;
+  const passiveIncomeTotal =
+    analytics.data?.totals?.passiveIncome ?? expenses.data?.passiveIncome?.total ?? 0;
+  const activeIncomeTotal =
+    analytics.data?.totals?.activeIncome ?? totalIncome - passiveIncomeTotal;
+  const monthlyPoints = useMemo(() => expenses.data?.monthly ?? [], [expenses.data?.monthly]);
 
   const incomeTimeline = useMemo(
     () => monthlyPoints.map((point) => ({ date: point.date, income: point.income })),
@@ -70,10 +66,10 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
       : `${incomeDelta > 0 ? '+' : ''}${Math.round(incomeDelta).toLocaleString('ru-RU')} ₽`;
   const incomeDeltaSubtitle = previousPoint ? 'к прошлому месяцу' : 'Нет данных для сравнения';
 
-  const incomeBreakdown = useMemo(
+  const activeIncomeBreakdown = useMemo(
     () =>
       incomeCategories
-        .filter((category) => (category.earned ?? 0) > 0)
+        .filter((category) => (category.earned ?? 0) !== 0)
         .map((category) => ({
           id: category.id,
           name: category.name,
@@ -85,11 +81,35 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
     [incomeCategories],
   );
 
-  const topIncomeCategory = incomeBreakdown[0] ?? null;
+  const passiveIncomeBreakdown = useMemo(
+    () =>
+      passiveIncomeTotal !== 0
+        ? [
+            {
+              id: 'passive-investments',
+              name: 'Пассивный доход (инвестиции)',
+              amount: passiveIncomeTotal,
+              color: '#22c55e',
+            },
+          ]
+        : [],
+    [passiveIncomeTotal],
+  );
+
+  const incomeBreakdown = useMemo(
+    () => [...passiveIncomeBreakdown, ...activeIncomeBreakdown],
+    [activeIncomeBreakdown, passiveIncomeBreakdown],
+  );
+
+  const topIncomeCategory = activeIncomeBreakdown[0] ?? passiveIncomeBreakdown[0] ?? null;
 
   const topIncomeHighlight = topIncomeCategory
     ? { name: topIncomeCategory.name, amount: topIncomeCategory.amount, color: topIncomeCategory.color }
     : null;
+
+  const highlightTotal = topIncomeCategory?.id === 'passive-investments'
+    ? totalIncome
+    : activeIncomeTotal;
 
   const incomeOperations = expenses.data?.incomes ?? [];
 
@@ -114,14 +134,20 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
         <MetricCard
           title="Всего доходов"
           value={formatCurrency(totalIncome)}
-          subtitle="За выбранный период"
+          subtitle="За выбранный период (активные + пассивные)"
           accent="green"
         />
         <MetricCard
-          title="Средние доходы"
-          value={formatCurrency(averageIncome)}
-          subtitle="Среднее по активным месяцам"
+          title="Активные доходы"
+          value={formatCurrency(activeIncomeTotal)}
+          subtitle="Доходы по категориям"
           accent="violet"
+        />
+        <MetricCard
+          title="Пассивный доход"
+          value={formatCurrency(passiveIncomeTotal)}
+          subtitle="Сводка по инвестициям"
+          accent="green"
         />
         <MetricCard
           title="Динамика"
@@ -141,7 +167,7 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
 
       <section className={styles.gridTwoColumn}>
         <CategoryForm mode="INCOME" onCreated={handleOperationsChanged} />
-        <IncomeHighlightsCard topCategory={topIncomeHighlight} totalIncome={totalIncome} />
+        <IncomeHighlightsCard topCategory={topIncomeHighlight} totalIncome={highlightTotal} />
       </section>
 
       <section className={styles.gridSingle}>

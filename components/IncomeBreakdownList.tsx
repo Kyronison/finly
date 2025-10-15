@@ -12,7 +12,9 @@ interface Props {
 }
 
 function formatCurrency(value: number): string {
-  return `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽`;
+  const formatted = Math.abs(value).toLocaleString('ru-RU', { maximumFractionDigits: 2 });
+  const sign = value < 0 ? '−' : '';
+  return `${sign}${formatted} ₽`;
 }
 
 function formatShare(value: number): string {
@@ -33,7 +35,7 @@ export function IncomeBreakdownList({ items }: Props) {
     );
   }
 
-  const total = items.reduce((sum, item) => sum + item.amount, 0);
+  const total = items.reduce((sum, item) => sum + Math.abs(item.amount), 0);
 
   return (
     <div className={styles.container}>
@@ -46,12 +48,15 @@ export function IncomeBreakdownList({ items }: Props) {
       </div>
       <ul className={styles.list}>
         {items.map((item) => {
-          const share = total > 0 ? (item.amount / total) * 100 : 0;
+          const share = total > 0 ? (Math.abs(item.amount) / total) * 100 : 0;
           return (
             <li key={item.id} className={styles.item}>
               <div className={styles.itemHeader}>
                 <div className={styles.meta}>
-                  <span className={styles.dot} style={{ background: item.color ?? '#22c55e' }} />
+                  <span
+                    className={styles.dot}
+                    style={{ background: item.amount < 0 ? '#ef4444' : item.color ?? '#22c55e' }}
+                  />
                   <span className={styles.name}>{item.name}</span>
                 </div>
                 <div className={styles.metrics}>
@@ -63,7 +68,10 @@ export function IncomeBreakdownList({ items }: Props) {
                 <div className={styles.barTrack}>
                   <span
                     className={styles.barFill}
-                    style={{ width: `${Math.min(100, share)}%`, background: item.color ?? '#22c55e' }}
+                    style={{
+                      width: `${Math.min(100, share)}%`,
+                      background: item.amount < 0 ? '#ef4444' : item.color ?? '#22c55e',
+                    }}
                   />
                 </div>
                 <span className={styles.shareLabel}>Доля от всех доходов</span>
