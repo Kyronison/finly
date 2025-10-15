@@ -1,8 +1,8 @@
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import {
-  Area,
-  AreaChart,
+  Bar,
+  BarChart,
   Brush,
   CartesianGrid,
   Legend,
@@ -46,6 +46,47 @@ export function SpendingChart({ data }: Props) {
     };
   });
 
+  const lastSix = formatted.slice(-6);
+
+  const average = (points: typeof formatted, key: 'income' | 'expenses') => {
+    if (points.length === 0) {
+      return 0;
+    }
+
+    const total = points.reduce((sum, point) => sum + point[key], 0);
+    return total / points.length;
+  };
+
+  const averageExpenses = average(lastSix, 'expenses');
+  const averageIncome = average(lastSix, 'income');
+
+  const latestPoint = formatted[formatted.length - 1];
+  const previousPoint = formatted[formatted.length - 2];
+
+  const expensesChange =
+    latestPoint && previousPoint
+      ? latestPoint.expenses - previousPoint.expenses
+      : 0;
+  const incomeChange =
+    latestPoint && previousPoint ? latestPoint.income - previousPoint.income : 0;
+
+  const formatCurrency = (value: number) =>
+    `${Math.round(value).toLocaleString('ru-RU')} ₽`;
+
+  const formatChange = (value: number) => {
+    if (!previousPoint) {
+      return '—';
+    }
+
+    if (value === 0) {
+      return '0 ₽';
+    }
+
+    const rounded = Math.round(Math.abs(value));
+    const amount = `${rounded.toLocaleString('ru-RU')} ₽`;
+    return value > 0 ? `+${amount}` : `-${amount}`;
+  };
+
   return (
     <div className={styles.container}>
       <header className={styles.header}>
@@ -54,18 +95,42 @@ export function SpendingChart({ data }: Props) {
           <p>Сравните помесячные поступления и траты за выбранный период</p>
         </div>
       </header>
+      <div className={styles.summary}>
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>Средние расходы (6 мес.)</span>
+          <span className={styles.statValue}>{formatCurrency(averageExpenses)}</span>
+          <span
+            className={`${styles.statChange} ${
+              expensesChange > 0
+                ? styles.statChangeNegative
+                : expensesChange < 0
+                ? styles.statChangePositive
+                : ''
+            }`}
+          >
+            {formatChange(expensesChange)} к прошлому месяцу
+          </span>
+        </div>
+        <div className={styles.statCard}>
+          <span className={styles.statLabel}>Средние доходы (6 мес.)</span>
+          <span className={styles.statValue}>{formatCurrency(averageIncome)}</span>
+          <span
+            className={`${styles.statChange} ${
+              incomeChange > 0
+                ? styles.statChangePositive
+                : incomeChange < 0
+                ? styles.statChangeNegative
+                : ''
+            }`}
+          >
+            {formatChange(incomeChange)} к прошлому месяцу
+          </span>
+        </div>
+      </div>
       <div className={styles.chartWrapper}>
         <ResponsiveContainer width="100%" height={320}>
-          <AreaChart data={formatted} margin={{ left: 0, right: 0, top: 20, bottom: 0 }}>
+          <BarChart data={formatted} margin={{ left: 0, right: 0, top: 20, bottom: 0 }} barGap={12}>
             <defs>
-              <linearGradient id="chart-expenses" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#ef4444" stopOpacity={0.8} />
-                <stop offset="100%" stopColor="#ef4444" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="chart-income" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#22c55e" stopOpacity={0.8} />
-                <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
-              </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
@@ -99,23 +164,9 @@ export function SpendingChart({ data }: Props) {
               wrapperStyle={{ paddingTop: 12 }}
               formatter={(value) => (value === 'expenses' ? 'Расходы' : 'Доходы')}
             />
-            <Area
-              type="monotone"
-              dataKey="expenses"
-              stroke="#ef4444"
-              strokeWidth={2}
-              fill="url(#chart-expenses)"
-              name="expenses"
-            />
-            <Area
-              type="monotone"
-              dataKey="income"
-              stroke="#22c55e"
-              strokeWidth={2}
-              fill="url(#chart-income)"
-              name="income"
-            />
-          </AreaChart>
+            <Bar dataKey="expenses" fill="#ef4444" radius={[6, 6, 0, 0]} name="expenses" />
+            <Bar dataKey="income" fill="#22c55e" radius={[6, 6, 0, 0]} name="income" />
+          </BarChart>
         </ResponsiveContainer>
       </div>
     </div>

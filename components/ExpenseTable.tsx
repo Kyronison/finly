@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 
@@ -25,13 +25,34 @@ interface Props {
   expenses: Expense[];
   categories: CategoryOption[];
   onChanged: () => void;
+  periodStart?: string;
+  periodEnd?: string;
 }
 
-export function ExpenseTable({ expenses, categories, onChanged }: Props) {
+export function ExpenseTable({ expenses, categories, onChanged, periodStart, periodEnd }: Props) {
   const [error, setError] = useState('');
+  const [exportError, setExportError] = useState('');
+  const [message, setMessage] = useState('');
+  const [isExporting, setIsExporting] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+  const [exportStart, setExportStart] = useState(periodStart ?? '');
+  const [exportEnd, setExportEnd] = useState(periodEnd ?? '');
+
+  useEffect(() => {
+    setExportStart(periodStart ?? '');
+  }, [periodStart]);
+
+  useEffect(() => {
+    setExportEnd(periodEnd ?? '');
+  }, [periodEnd]);
+
+  const displayedExpenses = useMemo(() => expenses.slice(0, 10), [expenses]);
+  const hasMoreExpenses = expenses.length > displayedExpenses.length;
 
   async function updateExpense(id: string, payload: Record<string, unknown>) {
     setError('');
+    setExportError('');
+    setMessage('');
     const response = await fetch(`/api/expenses/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
@@ -96,6 +117,8 @@ export function ExpenseTable({ expenses, categories, onChanged }: Props) {
     const confirmed = window.confirm('Удалить операцию?');
     if (!confirmed) return;
     setError('');
+    setExportError('');
+    setMessage('');
     const response = await fetch(`/api/expenses/${expense.id}`, { method: 'DELETE' });
     if (!response.ok) {
       const data = await response.json();
@@ -103,6 +126,83 @@ export function ExpenseTable({ expenses, categories, onChanged }: Props) {
       return;
     }
     onChanged();
+  }
+
+  function validateExportPeriod() {
+    if (!exportStart || !exportEnd) {
+      throw new Error('Укажите дату начала и окончания периода');
+    }
+
+    if (exportStart > exportEnd) {
+      throw new Error('Дата начала не может быть позже даты окончания');
+    }
+  }
+
+  async function handleExportAll() {
+    try {
+      validateExportPeriod();
+    } catch (validationError) {
+      setExportError(validationError instanceof Error ? validationError.message : 'Некорректный период');
+      setMessage('');
+      return;
+    }
+
+    setIsExporting(true);
+    setExportError('');
+    setMessage('');
+
+    const params = new URLSearchParams();
+    params.set('start', exportStart);
+    params.set('end', exportEnd);
+
+    try {
+      const response = await fetch(`/api/expenses/export?${params.toString()}`);
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.message ?? 'Не удалось выгрузить операции');
+      }
+
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `finly-operations-${exportStart}-${exportEnd}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setMessage('Файл с операциями сохранён.');
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Не удалось выгрузить операции');
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
+  async function handleDeleteAll() {
+    const confirmed = window.confirm('Удалить все операции без возможности восстановления?');
+    if (!confirmed) return;
+
+    setIsClearing(true);
+    setError('');
+    setExportError('');
+    setMessage('');
+
+    try {
+      const response = await fetch('/api/expenses', { method: 'DELETE' });
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload.message ?? 'Не удалось удалить операции');
+      }
+
+      setMessage('Все операции удалены.');
+      onChanged();
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Не удалось удалить операции');
+    } finally {
+      setIsClearing(false);
+    }
   }
 
   return (
@@ -119,7 +219,7 @@ export function ExpenseTable({ expenses, categories, onChanged }: Props) {
           <span className={styles.amountCol}>Сумма</span>
           <span className={styles.actionsCol}>Действия</span>
         </div>
-        {expenses.map((expense) => (
+        {displayedExpenses.map((expense) => (
           <div key={expense.id} className={styles.row}>
             <span>{format(new Date(expense.date), 'd MMM', { locale: ru })}</span>
             <span>{expense.description || '—'}</span>
@@ -138,8 +238,50 @@ export function ExpenseTable({ expenses, categories, onChanged }: Props) {
             </span>
           </div>
         ))}
+        {displayedExpenses.length === 0 && (
+          <div className={styles.emptyState}>За выбранный период нет операций</div>
+        )}
+      </div>
+      <div className={styles.footer}>
+        <div className={styles.footerInfo}>
+          <span>
+            {displayedExpenses.length > 0
+              ? `Показаны последние ${displayedExpenses.length} операций`
+              : 'Нет операций для отображения'}
+          </span>
+          {hasMoreExpenses ? <span className={styles.caption}>Выгрузите файл, чтобы посмотреть полный список.</span> : null}
+        </div>
+        <div className={styles.footerActions}>
+          <div className={styles.exportControls}>
+            <label className={styles.exportField}>
+              <span>С</span>
+              <input
+                type="date"
+                value={exportStart}
+                onChange={(event) => setExportStart(event.target.value)}
+              />
+            </label>
+            <label className={styles.exportField}>
+              <span>По</span>
+              <input type="date" value={exportEnd} onChange={(event) => setExportEnd(event.target.value)} />
+            </label>
+            <button type="button" onClick={handleExportAll} disabled={isExporting} className={styles.exportButton}>
+              {isExporting ? 'Готовим файл…' : 'Выгрузить все операции'}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={handleDeleteAll}
+            className={styles.clearButton}
+            disabled={isClearing || displayedExpenses.length === 0}
+          >
+            {isClearing ? 'Удаляем…' : 'Удалить все операции'}
+          </button>
+        </div>
       </div>
       {error && <p className={styles.error}>{error}</p>}
+      {exportError && <p className={styles.error}>{exportError}</p>}
+      {message && <p className={styles.success}>{message}</p>}
     </div>
   );
 }

@@ -1,40 +1,9 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { addMonths, endOfMonth, format, formatISO, parseISO, startOfMonth, subMonths } from 'date-fns';
+import { formatISO, startOfMonth } from 'date-fns';
 
 import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
-
-function parseBoundary(value?: string) {
-  if (!value) return null;
-
-  const normalized = value.length === 7 ? `${value}-01` : value;
-  const parsed = parseISO(normalized);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed;
-}
-
-function resolvePeriod(startRaw?: string, endRaw?: string) {
-  const now = new Date();
-  const fallbackStart = startOfMonth(now);
-  const fallbackEnd = endOfMonth(now);
-
-  const parsedStart = parseBoundary(startRaw);
-  const parsedEnd = parseBoundary(endRaw);
-
-  let start = startOfMonth(parsedStart ?? fallbackStart);
-  let end = endOfMonth(parsedEnd ?? fallbackEnd);
-
-  if (start.getTime() > end.getTime()) {
-    const tmp = start;
-    start = startOfMonth(end);
-    end = endOfMonth(tmp);
-  }
-
-  return { start, end };
-}
+import { buildTimelineRange, enumerateMonths, formatMonthKey, resolvePeriod } from '@/lib/period';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
@@ -45,7 +14,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return createExpense(req, res);
   }
 
-  res.setHeader('Allow', 'GET,POST');
+  if (req.method === 'DELETE') {
+    return deleteAllExpenses(req, res);
+  }
+
+  res.setHeader('Allow', 'GET,POST,DELETE');
   return res.status(405).json({ message: 'Method not allowed' });
 }
 
@@ -67,16 +40,19 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
       include: { category: true },
       orderBy: { date: 'desc' },
     }),
-    prisma.expense.findMany({
-      where: {
-        userId,
-        date: {
-          gte: startOfMonth(subMonths(start, 11)),
-          lte: end,
+    (async () => {
+      const { from, to } = buildTimelineRange(start);
+      return prisma.expense.findMany({
+        where: {
+          userId,
+          date: {
+            gte: from,
+            lte: to,
+          },
         },
-      },
-      include: { category: true },
-    }),
+        include: { category: true },
+      });
+    })(),
   ]);
 
   const totals = {
@@ -102,7 +78,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
   >();
 
   timelineExpenses.forEach((operation) => {
-    const monthKey = format(operation.date, 'yyyy-MM');
+    const monthKey = formatMonthKey(operation.date);
     const bucket =
       monthlyTotals.get(monthKey) ?? {
         date: startOfMonth(operation.date),
@@ -120,23 +96,18 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
     monthlyTotals.set(monthKey, bucket);
   });
 
-  const timelineStart = startOfMonth(subMonths(start, 11));
-  const timelineEnd = end;
+  const { from: timelineStart, to: timelineEnd } = buildTimelineRange(start);
   const monthly: Array<{ date: string; income: number; expenses: number }> = [];
 
-  for (
-    let cursor = timelineStart;
-    cursor.getTime() <= timelineEnd.getTime();
-    cursor = addMonths(cursor, 1)
-  ) {
-    const monthKey = format(cursor, 'yyyy-MM');
+  enumerateMonths(timelineStart, timelineEnd).forEach((cursor) => {
+    const monthKey = formatMonthKey(cursor);
     const bucket = monthlyTotals.get(monthKey);
     monthly.push({
       date: formatISO(startOfMonth(cursor), { representation: 'date' }),
       income: bucket?.income ?? 0,
       expenses: bucket?.expenses ?? 0,
     });
-  }
+  });
 
   const expenses = rawExpenses.map((item) => ({
     ...item,
@@ -192,4 +163,13 @@ async function createExpense(req: NextApiRequest, res: NextApiResponse) {
   });
 
   return res.status(201).json({ expense: { ...expense, amount: Number(expense.amount) } });
+}
+
+async function deleteAllExpenses(req: NextApiRequest, res: NextApiResponse) {
+  const userId = requireAuth(req, res);
+  if (!userId) return;
+
+  const result = await prisma.expense.deleteMany({ where: { userId } });
+
+  return res.status(200).json({ deleted: result.count });
 }
