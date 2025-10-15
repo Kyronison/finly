@@ -38,6 +38,11 @@ export function ExpenseTable({ expenses, categories, onChanged, periodStart, per
   const [exportStart, setExportStart] = useState(periodStart ?? '');
   const [exportEnd, setExportEnd] = useState(periodEnd ?? '');
 
+  const expenseOnly = useMemo(
+    () => expenses.filter((expense) => expense.category?.type !== 'INCOME'),
+    [expenses],
+  );
+
   useEffect(() => {
     setExportStart(periodStart ?? '');
   }, [periodStart]);
@@ -46,8 +51,8 @@ export function ExpenseTable({ expenses, categories, onChanged, periodStart, per
     setExportEnd(periodEnd ?? '');
   }, [periodEnd]);
 
-  const displayedExpenses = useMemo(() => expenses.slice(0, 10), [expenses]);
-  const hasMoreExpenses = expenses.length > displayedExpenses.length;
+  const displayedExpenses = useMemo(() => expenseOnly.slice(0, 10), [expenseOnly]);
+  const hasMoreExpenses = expenseOnly.length > displayedExpenses.length;
 
   async function updateExpense(id: string, payload: Record<string, unknown>) {
     setError('');
@@ -273,7 +278,7 @@ export function ExpenseTable({ expenses, categories, onChanged, periodStart, per
             type="button"
             onClick={handleDeleteAll}
             className={styles.clearButton}
-            disabled={isClearing || displayedExpenses.length === 0}
+            disabled={isClearing || expenseOnly.length === 0}
           >
             {isClearing ? 'Удаляем…' : 'Удалить все операции'}
           </button>

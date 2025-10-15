@@ -32,15 +32,18 @@ export function BalanceTrendChart({ data }: Props) {
   );
 
   const chartData = useMemo(() => {
+    let runningBalance = 0;
     return sorted.map((point) => {
       const parsed = new Date(point.date);
       const labelRaw = format(parsed, 'LLLL yyyy', { locale: ru });
       const label = labelRaw.charAt(0).toUpperCase() + labelRaw.slice(1);
-      const balance = point.income - point.expenses;
+      const delta = point.income - point.expenses;
+      runningBalance += delta;
       return {
         ...point,
         label,
-        balance,
+        balance: runningBalance,
+        delta,
       };
     });
   }, [sorted]);
@@ -85,10 +88,19 @@ export function BalanceTrendChart({ data }: Props) {
                 border: '1px solid rgba(255, 255, 255, 0.1)',
                 borderRadius: 12,
               }}
-              formatter={(value: number, name: string) => [
-                `${Math.round(value).toLocaleString('ru-RU')} ₽`,
-                name === 'balance' ? 'Баланс' : name,
-              ]}
+              formatter={(value: number, name: string) => {
+                const formatted = `${Math.round(value).toLocaleString('ru-RU')} ₽`;
+                if (name === 'balance') {
+                  return [formatted, 'Накопленный баланс'];
+                }
+                if (name === 'income') {
+                  return [formatted, 'Доходы'];
+                }
+                if (name === 'expenses') {
+                  return [formatted, 'Расходы'];
+                }
+                return [formatted, name];
+              }}
               labelFormatter={(label) => label}
             />
             <Legend wrapperStyle={{ paddingTop: 12 }} />
@@ -97,7 +109,7 @@ export function BalanceTrendChart({ data }: Props) {
               dataKey="balance"
               stroke="#38bdf8"
               fill="rgba(56, 189, 248, 0.2)"
-              name="Баланс"
+              name="Накопленный баланс"
               strokeWidth={2}
             />
             <Area
