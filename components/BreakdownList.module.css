@@ -5,12 +5,26 @@
   padding: 24px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 20px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .title {
   margin: 0;
   font-size: 18px;
+}
+
+.summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
 }
 
 .list {
@@ -19,13 +33,26 @@
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 18px;
 }
 
 .item {
   display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.itemHeader {
+  display: flex;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   align-items: center;
 }
 
@@ -33,9 +60,11 @@
   display: flex;
   gap: 12px;
   align-items: center;
+  min-width: 0;
 }
 
 .dot {
+  flex-shrink: 0;
   width: 12px;
   height: 12px;
   border-radius: 999px;
@@ -43,32 +72,72 @@
 
 .name {
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.metrics {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
 }
 
 .amount {
-  font-size: 13px;
+  font-weight: 600;
+}
+
+.share {
+  padding: 2px 8px;
+  font-size: 12px;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.18);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.progressBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.captionRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 12px;
   color: rgba(255, 255, 255, 0.6);
 }
 
-.progress {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.caption {
+  color: inherit;
 }
 
-.caption {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
+.status {
+  font-weight: 600;
+}
+
+.positive {
+  color: #39d98a;
+}
+
+.negative {
+  color: #ff6b6b;
+}
+
+.muted {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 @media (max-width: 960px) {
-  .item {
+  .itemHeader {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .progress {
+  .metrics {
     width: 100%;
+    justify-content: space-between;
   }
 }

@@ -1,4 +1,4 @@
-import { CategoryType } from '@prisma/client';
+import { CategoryType, Prisma } from '@prisma/client';
 
 import { prisma } from '@/lib/prisma';
 
@@ -38,6 +38,12 @@ function normalizeCategoryName(name: string): string {
   return name.trim().replace(/\s+/g, ' ');
 }
 
+function makeOperationKey(date: Date, amount: number): string {
+  const day = date.toISOString().slice(0, 10);
+  const normalizedAmount = amount.toFixed(2);
+  return `${day}:${normalizedAmount}`;
+}
+
 export async function importOperations({
   operations,
   userId,
@@ -51,9 +57,11 @@ export async function importOperations({
     date: Date;
     categoryName: string | null;
     description: string | null;
+    key: string;
   }> = [];
 
   let skipped = 0;
+  const seenInBatch = new Set<string>();
 
   for (const op of operations) {
     const amount = Number(op?.amount);
@@ -77,7 +85,14 @@ export async function importOperations({
       continue;
     }
 
-    prepared.push({ amount, date: parsedDate, categoryName, description });
+    const key = makeOperationKey(parsedDate, amount);
+    if (seenInBatch.has(key)) {
+      skipped += 1;
+      continue;
+    }
+
+    seenInBatch.add(key);
+    prepared.push({ amount, date: parsedDate, categoryName, description, key });
   }
 
   if (prepared.length === 0) {
@@ -91,6 +106,42 @@ export async function importOperations({
         type: categoryType,
       },
     });
+
+    const existingKeys = new Set<string>();
+
+    if (prepared.length > 0) {
+      const dates = prepared.map((item) => item.date.getTime());
+      const minDate = new Date(Math.min(...dates));
+      const maxDate = new Date(Math.max(...dates));
+
+      const where: Prisma.ExpenseWhereInput =
+        type === 'INCOME'
+          ? {
+              userId,
+              date: {
+                gte: minDate,
+                lte: maxDate,
+              },
+              category: { type: categoryType },
+            }
+          : {
+              userId,
+              date: {
+                gte: minDate,
+                lte: maxDate,
+              },
+              OR: [{ category: { type: categoryType } }, { categoryId: null }],
+            };
+
+      const existingOperations = await tx.expense.findMany({
+        where,
+        select: { amount: true, date: true },
+      });
+
+      existingOperations.forEach((operation) => {
+        existingKeys.add(makeOperationKey(new Date(operation.date), Number(operation.amount)));
+      });
+    }
 
     const categoryMap = new Map<string, { id: string }>();
     existingCategories.forEach((category) => {
@@ -135,6 +186,11 @@ export async function importOperations({
     }> = [];
 
     for (const item of prepared) {
+      if (existingKeys.has(item.key)) {
+        skipped += 1;
+        continue;
+      }
+
       let categoryId: string | null = null;
       if (item.categoryName) {
         const key = normalizeCategoryName(item.categoryName).toLowerCase();
@@ -164,6 +220,8 @@ export async function importOperations({
         date: item.date,
         userId,
       });
+
+      existingKeys.add(item.key);
     }
 
     if (operationsToCreate.length === 0) {
