@@ -171,7 +171,7 @@ type AccountPreview = {
 type ResolvedAccount = {
   accountId: string | null;
   brokerAccountType: string | null;
-  requestAccountId?: string;
+  requestAccountIds: string[];
 };
 
 type NormalizedPosition = {
@@ -416,6 +416,47 @@ function normalizePortfolioPosition(position: ApiPortfolioPosition): NormalizedP
     currentPrice: moneyValueToNumber(position.currentPrice),
     currency: position.currentPrice?.currency ?? position.averagePositionPrice?.currency ?? null,
   };
+}
+
+function mergeNormalizedPositions(positions: NormalizedPosition[]): NormalizedPosition[] {
+  const merged = new Map<string, NormalizedPosition>();
+
+  positions.forEach((position) => {
+    const existing = merged.get(position.figi);
+    if (!existing) {
+      merged.set(position.figi, { ...position });
+      return;
+    }
+
+    const totalBalance = existing.balance + position.balance;
+    const totalInvested =
+      (existing.averagePrice ?? 0) * existing.balance + (position.averagePrice ?? 0) * position.balance;
+    const averagePrice =
+      totalBalance !== 0
+        ? totalInvested / totalBalance
+        : existing.averagePrice ?? position.averagePrice ?? null;
+
+    const lot =
+      existing.lot != null && position.lot != null
+        ? existing.lot + position.lot
+        : existing.lot ?? position.lot ?? null;
+
+    const currentPrice = position.currentPrice ?? existing.currentPrice ?? null;
+    const instrumentType = existing.instrumentType ?? position.instrumentType ?? null;
+    const currency = existing.currency ?? position.currency ?? null;
+
+    merged.set(position.figi, {
+      figi: position.figi,
+      instrumentType,
+      balance: totalBalance,
+      lot,
+      averagePrice,
+      currentPrice,
+      currency,
+    });
+  });
+
+  return Array.from(merged.values());
 }
 
 async function buildPortfolioSnapshots(
@@ -677,10 +718,18 @@ function resolveAccount(accounts: AccountPreview[], requestedId?: string): Resol
       });
     }
 
+    const uniqueAccountIds = new Set<string>();
+    const requestAccountIds: string[] = [];
+    accounts.forEach((account) => {
+      if (uniqueAccountIds.has(account.brokerAccountId)) return;
+      uniqueAccountIds.add(account.brokerAccountId);
+      requestAccountIds.push(account.brokerAccountId);
+    });
+
     return {
       accountId: ALL_ACCOUNTS_ID,
       brokerAccountType: ALL_ACCOUNTS_LABEL,
-      requestAccountId: undefined,
+      requestAccountIds,
     };
   }
 
@@ -696,7 +745,7 @@ function resolveAccount(accounts: AccountPreview[], requestedId?: string): Resol
     return {
       accountId: match.brokerAccountId,
       brokerAccountType: match.brokerAccountType ?? null,
-      requestAccountId: match.brokerAccountId,
+      requestAccountIds: [match.brokerAccountId],
     };
   }
 
@@ -711,7 +760,7 @@ function resolveAccount(accounts: AccountPreview[], requestedId?: string): Resol
     return {
       accountId: single.brokerAccountId,
       brokerAccountType: single.brokerAccountType ?? null,
-      requestAccountId: single.brokerAccountId,
+      requestAccountIds: [single.brokerAccountId],
     };
   }
 
@@ -734,6 +783,33 @@ export async function fetchAccountsPreview(token: string) {
     .filter((account) => account.brokerAccountId.length > 0);
 }
 
+type AccountPortfolioData = {
+  accountId: string;
+  portfolio: PortfolioResponse;
+  positions: PositionsResponse;
+  operations: OperationsResponse;
+};
+
+async function fetchAccountPortfolioData(token: string, accountId: string): Promise<AccountPortfolioData> {
+  const accountPayload = { accountId };
+  const to = new Date();
+  const from = new Date(to);
+  from.setFullYear(from.getFullYear() - 5);
+
+  const [portfolio, positions, operations] = await Promise.all([
+    callRest<PortfolioResponse>(token, 'OperationsService', 'GetPortfolio', accountPayload),
+    callRest<PositionsResponse>(token, 'OperationsService', 'GetPositions', accountPayload),
+    callRest<OperationsResponse>(token, 'OperationsService', 'GetOperations', {
+      ...accountPayload,
+      from: from.toISOString(),
+      to: to.toISOString(),
+      state: 'OPERATION_STATE_EXECUTED',
+    }),
+  ]);
+
+  return { accountId, portfolio, positions, operations };
+}
+
 export async function upsertPortfolioConnection({
   userId,
   token,
@@ -746,10 +822,18 @@ export async function upsertPortfolioConnection({
   const accounts = await fetchAccountsPreview(token);
   const resolvedAccount = resolveAccount(accounts, accountId ?? undefined);
 
-  const accountPayload =
-    resolvedAccount.requestAccountId != null ? { accountId: resolvedAccount.requestAccountId } : {};
+  const accountIdsToValidate = resolvedAccount.requestAccountIds.filter((id) => id && id.length > 0);
+  if (accountIdsToValidate.length === 0) {
+    throw Object.assign(new Error('Не удалось определить счёт для валидации токена'), {
+      code: 'NO_ACCOUNTS',
+    });
+  }
 
-  await callRest<PortfolioResponse>(token, 'OperationsService', 'GetPortfolio', accountPayload);
+  await Promise.all(
+    accountIdsToValidate.map((id) =>
+      callRest<PortfolioResponse>(token, 'OperationsService', 'GetPortfolio', { accountId: id }),
+    ),
+  );
 
   const connection = await prisma.portfolioConnection.upsert({
     where: { userId },
@@ -778,30 +862,45 @@ export async function syncTinkoffPortfolio(connectionId: string) {
   const accounts = await fetchAccountsPreview(connection.token);
   const resolvedAccount = resolveAccount(accounts, connection.accountId ?? undefined);
 
-  const accountPayload =
-    resolvedAccount.requestAccountId != null ? { accountId: resolvedAccount.requestAccountId } : {};
+  const accountIdsToSync = resolvedAccount.requestAccountIds.filter((id) => id && id.length > 0);
+  if (accountIdsToSync.length === 0) {
+    throw Object.assign(new Error('Не удалось определить счёт для синхронизации'), {
+      code: 'NO_ACCOUNTS',
+    });
+  }
 
-  const [portfolioResponse, positionsResponse, operationsResponse] = await Promise.all([
-    callRest<PortfolioResponse>(connection.token, 'OperationsService', 'GetPortfolio', accountPayload),
-    callRest<PositionsResponse>(connection.token, 'OperationsService', 'GetPositions', accountPayload),
-    callRest<OperationsResponse>(connection.token, 'OperationsService', 'GetOperations', {
-      ...accountPayload,
-      from: new Date(new Date().setFullYear(new Date().getFullYear() - 5)).toISOString(),
-      to: new Date().toISOString(),
-      state: 'OPERATION_STATE_EXECUTED',
-    }),
-  ]);
+  const accountData = await Promise.all(
+    accountIdsToSync.map((accountId) => fetchAccountPortfolioData(connection.token, accountId)),
+  );
 
-  const positions = ensureArray(portfolioResponse.positions)
-    .map(normalizePortfolioPosition)
-    .filter((position): position is NormalizedPosition => Boolean(position));
+  const rawPositions = accountData.flatMap((data) =>
+    ensureArray(data.portfolio.positions)
+      .map(normalizePortfolioPosition)
+      .filter((position): position is NormalizedPosition => Boolean(position)),
+  );
 
-  const operations = ensureArray(operationsResponse.operations)
-    .map(normalizeOperation)
-    .filter(
-      (operation): operation is NormalizedOperation =>
-        operation != null && operation.state === 'OPERATION_STATE_EXECUTED',
-    );
+  const positions = mergeNormalizedPositions(rawPositions);
+
+  const needsOperationPrefix = new Set(accountIdsToSync).size > 1;
+  const operations = accountData.flatMap((data) => {
+    const normalized = ensureArray(data.operations.operations)
+      .map(normalizeOperation)
+      .filter(
+        (operation): operation is NormalizedOperation =>
+          operation != null && operation.state === 'OPERATION_STATE_EXECUTED',
+      );
+
+    if (!needsOperationPrefix) {
+      return normalized;
+    }
+
+    return normalized.map((operation) => ({
+      ...operation,
+      id: `${data.accountId}:${operation.id}`,
+    }));
+  });
+
+  const cashPositions = accountData.flatMap((data) => ensureArray(data.positions.money));
 
   const instrumentMeta = await enrichInstrumentMetadata(connection.token, positions, operations);
 
@@ -821,7 +920,7 @@ export async function syncTinkoffPortfolio(connectionId: string) {
     currencyTotals.set(currency, bucket);
   });
 
-  ensureArray(positionsResponse.money).forEach((currencyPosition) => {
+  cashPositions.forEach((currencyPosition) => {
     const amount = moneyValueToNumber(currencyPosition);
     if (amount == null) return;
     const currency = currencyPosition?.currency ?? 'RUB';
@@ -949,7 +1048,7 @@ export async function syncTinkoffPortfolio(connectionId: string) {
     await tx.portfolioConnection.update({
       where: { id: connectionId },
       data: {
-        accountId: resolvedAccount.brokerAccountId,
+        accountId: resolvedAccount.accountId,
         brokerAccountType: resolvedAccount.brokerAccountType,
         lastSyncedAt: new Date(),
       },
