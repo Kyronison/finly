@@ -49,6 +49,18 @@ interface ExpenseItem {
   } | null;
 }
 
+interface MonthlyDataPoint {
+  date: string;
+  income: number;
+  expenses: number;
+  expenseBreakdown: Array<{
+    id: string;
+    name: string;
+    color: string | null;
+    amount: number;
+  }>;
+}
+
 interface AnalyticsResponse {
   totals: {
     income: number;
@@ -137,7 +149,7 @@ export default function Dashboard({ user }: DashboardProps) {
   const categories = useSWR<{ categories: Category[] }>(categoriesKey);
   const expenses = useSWR<{
     expenses: ExpenseItem[];
-    monthly: Array<{ date: string; income: number; expenses: number }>;
+    monthly: MonthlyDataPoint[];
     totals: { income: number; expenses: number };
   }>(
     expensesKey,
@@ -301,7 +313,10 @@ export default function Dashboard({ user }: DashboardProps) {
       </section>
 
       <section className={styles.gridSingle}>
-        <SpendingChart data={expenses.data?.monthly ?? []} />
+        <SpendingChart
+          data={expenses.data?.monthly ?? []}
+          categories={categories.data?.categories ?? []}
+        />
       </section>
 
       <section className={styles.gridSingle}>

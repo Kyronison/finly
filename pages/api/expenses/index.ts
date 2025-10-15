@@ -5,6 +5,8 @@ import { prisma } from '@/lib/prisma';
 import { requireAuth } from '@/lib/auth';
 import { buildTimelineRange, enumerateMonths, formatMonthKey, resolvePeriod } from '@/lib/period';
 
+const UNCATEGORIZED_CATEGORY_ID = 'uncategorized';
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method === 'GET') {
     return listExpenses(req, res);
@@ -41,7 +43,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
       orderBy: { date: 'desc' },
     }),
     (async () => {
-      const { from, to } = buildTimelineRange(start);
+      const { from, to } = buildTimelineRange(end);
       return prisma.expense.findMany({
         where: {
           userId,
@@ -74,6 +76,14 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
       date: Date;
       income: number;
       expenses: number;
+      expensesByCategory: Map<
+        string,
+        {
+          amount: number;
+          name: string;
+          color: string | null;
+        }
+      >;
     }
   >();
 
@@ -84,6 +94,7 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
         date: startOfMonth(operation.date),
         income: 0,
         expenses: 0,
+        expensesByCategory: new Map(),
       };
 
     const amount = Number(operation.amount);
@@ -91,13 +102,33 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
       bucket.income += amount;
     } else {
       bucket.expenses += amount;
+      const categoryId = operation.categoryId ?? UNCATEGORIZED_CATEGORY_ID;
+      const previous = bucket.expensesByCategory.get(categoryId);
+      bucket.expensesByCategory.set(categoryId, {
+        amount: (previous?.amount ?? 0) + amount,
+        name:
+          operation.category?.name ??
+          previous?.name ??
+          (categoryId === UNCATEGORIZED_CATEGORY_ID ? 'Без категории' : 'Другая категория'),
+        color: operation.category?.color ?? previous?.color ?? null,
+      });
     }
 
     monthlyTotals.set(monthKey, bucket);
   });
 
-  const { from: timelineStart, to: timelineEnd } = buildTimelineRange(start);
-  const monthly: Array<{ date: string; income: number; expenses: number }> = [];
+  const { from: timelineStart, to: timelineEnd } = buildTimelineRange(end);
+  const monthly: Array<{
+    date: string;
+    income: number;
+    expenses: number;
+    expenseBreakdown: Array<{
+      id: string;
+      name: string;
+      color: string | null;
+      amount: number;
+    }>;
+  }> = [];
 
   enumerateMonths(timelineStart, timelineEnd).forEach((cursor) => {
     const monthKey = formatMonthKey(cursor);
@@ -106,6 +137,14 @@ async function listExpenses(req: NextApiRequest, res: NextApiResponse) {
       date: formatISO(startOfMonth(cursor), { representation: 'date' }),
       income: bucket?.income ?? 0,
       expenses: bucket?.expenses ?? 0,
+      expenseBreakdown: bucket
+        ? Array.from(bucket.expensesByCategory.entries()).map(([id, info]) => ({
+            id,
+            name: info.name,
+            color: info.color,
+            amount: info.amount,
+          }))
+        : [],
     });
   });
 
