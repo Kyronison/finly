@@ -82,19 +82,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     daySet.add(formatISO(expense.date, { representation: 'date' }));
   });
 
-  const breakdown = categories
-    .filter((category) => category.type === 'EXPENSE')
-    .map((category) => {
-      const spent = byCategory.get(category.id)?.spent ?? 0;
+  const breakdown = Array.from(byCategory.values())
+    .map((entry) => {
+      if (!entry.category || entry.category.type !== 'EXPENSE') {
+        return null;
+      }
+
       return {
-        id: category.id,
-        name: category.name,
-        color: category.color,
-        spent,
-        budget: category.budget,
-        progress: category.budget ? Math.min(1, spent / category.budget) : null,
+        id: entry.category.id,
+        name: entry.category.name,
+        color: entry.category.color,
+        spent: entry.spent,
+        budget: entry.category.budget,
+        progress: entry.category.budget ? Math.min(1, entry.spent / entry.category.budget) : null,
       };
     })
+    .filter((item): item is Exclude<typeof item, null> => !!item)
     .sort((a, b) => b.spent - a.spent)
     .slice(0, 6);
 

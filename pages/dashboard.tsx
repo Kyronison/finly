@@ -33,6 +33,7 @@ interface Category {
   type: 'INCOME' | 'EXPENSE';
   budget: number | null;
   spent?: number;
+  earned?: number;
   progress?: number | null;
   color?: string | null;
 }
@@ -146,13 +147,22 @@ export default function Dashboard({ user }: DashboardProps) {
   const expensesKey = `/api/expenses?${periodQuery}`;
 
   const analytics = useSWR<AnalyticsResponse>(analyticsKey);
-  const categories = useSWR<{ categories: Category[] }>(categoriesKey);
+  const categories = useSWR<{ categories: Category[]; allCategories?: Category[] }>(categoriesKey);
   const expenses = useSWR<{
     expenses: ExpenseItem[];
     monthly: MonthlyDataPoint[];
     totals: { income: number; expenses: number };
   }>(
     expensesKey,
+  );
+
+  const activeCategories = useMemo(
+    () => categories.data?.categories ?? [],
+    [categories.data?.categories],
+  );
+  const allCategories = useMemo(
+    () => categories.data?.allCategories ?? categories.data?.categories ?? [],
+    [categories.data?.allCategories, categories.data?.categories],
   );
 
   const periodLabel = useMemo(() => {
@@ -225,13 +235,13 @@ export default function Dashboard({ user }: DashboardProps) {
   const canNavigateForward = timeframe !== 'ALL' && anchorMonth < currentMonth;
 
   const expenseCategories = useMemo(
-    () => (categories.data?.categories ?? []).filter((category) => category.type === 'EXPENSE'),
-    [categories.data],
+    () => allCategories.filter((category) => category.type === 'EXPENSE'),
+    [allCategories],
   );
 
   const incomeCategories = useMemo(
-    () => (categories.data?.categories ?? []).filter((category) => category.type === 'INCOME'),
-    [categories.data],
+    () => allCategories.filter((category) => category.type === 'INCOME'),
+    [allCategories],
   );
 
   async function handleLogout() {
@@ -246,8 +256,12 @@ export default function Dashboard({ user }: DashboardProps) {
   }, [analytics, categories, expenses]);
 
   const chartCategories = useMemo(() => {
+    if (!expenses.data?.monthly?.length) {
+      return activeCategories;
+    }
+
     const usedCategoryIds = new Set<string>();
-    (expenses.data?.monthly ?? []).forEach((point) => {
+    expenses.data.monthly.forEach((point) => {
       point.expenseBreakdown.forEach((item) => {
         if (item.id) {
           usedCategoryIds.add(item.id);
@@ -255,10 +269,8 @@ export default function Dashboard({ user }: DashboardProps) {
       });
     });
 
-    return (categories.data?.categories ?? []).filter((category) =>
-      usedCategoryIds.has(category.id),
-    );
-  }, [categories.data?.categories, expenses.data?.monthly]);
+    return activeCategories.filter((category) => usedCategoryIds.has(category.id));
+  }, [activeCategories, expenses.data?.monthly]);
 
   return (
     <DashboardLayout user={user} onLogout={handleLogout}>
@@ -341,7 +353,7 @@ export default function Dashboard({ user }: DashboardProps) {
       </section>
 
       <section className={styles.gridSingle}>
-        <CategoryList categories={categories.data?.categories ?? []} onChanged={() => categories.mutate()} />
+        <CategoryList categories={allCategories} onChanged={() => categories.mutate()} />
       </section>
 
       <section className={styles.gridTwoColumn}>
@@ -365,7 +377,7 @@ export default function Dashboard({ user }: DashboardProps) {
       <section className={styles.gridSingle}>
         <ExpenseTable
           expenses={expenses.data?.expenses ?? []}
-          categories={categories.data?.categories ?? []}
+          categories={allCategories}
           onChanged={handleOperationsChanged}
           periodStart={expenses.data?.periodStart}
           periodEnd={expenses.data?.periodEnd}

@@ -102,7 +102,9 @@ async function getCategories(req: NextApiRequest, res: NextApiResponse) {
     };
   });
 
-  return res.status(200).json({ categories: enriched });
+  const active = enriched.filter((category) => (category.spent ?? 0) > 0 || (category.earned ?? 0) > 0);
+
+  return res.status(200).json({ categories: active, allCategories: enriched });
 }
 
 async function createCategory(req: NextApiRequest, res: NextApiResponse) {
