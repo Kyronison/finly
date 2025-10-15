@@ -8,6 +8,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
 import { MetricCard } from '@/components/MetricCard';
 import { BalanceTrendChart } from '@/components/BalanceTrendChart';
+import { ExpenseImport, IncomeImport, TBankImport } from '@/components/ExpenseImport';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { getAuthenticatedUser, type AuthenticatedUser } from '@/lib/getAuthenticatedUser';
 import styles from '@/styles/Dashboard.module.css';
@@ -43,6 +44,7 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
     canNavigateForward,
     analytics,
     expenses,
+    handleOperationsChanged,
   } = useDashboardData();
 
   const totalIncome = analytics.data?.totals?.income ?? 0;
@@ -137,15 +139,20 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
       </section>
 
       <section className={styles.gridSingle}>
+        <div className={styles.balanceSummaryCard}>
+          <h3>Соотношение доходов и расходов</h3>
+          <p>
+            Доходы: {formatCurrency(totalIncome)} • Расходы: {formatCurrency(totalExpenses)} • Баланс:{' '}
+            {formatCurrency(balance)}
+          </p>
+        </div>
+      </section>
+
+      <section className={styles.gridSingle}>
         <div className={styles.importGrid}>
-          <div className={styles.balanceSummaryCard}>
-            <h3>Соотношение доходов и расходов</h3>
-            <p>
-              Доходы: {formatCurrency(totalIncome)} • Расходы: {formatCurrency(totalExpenses)} • Баланс:
-              {' '}
-              {formatCurrency(balance)}
-            </p>
-          </div>
+          <TBankImport onImported={handleOperationsChanged} />
+          <ExpenseImport onImported={handleOperationsChanged} />
+          <IncomeImport onImported={handleOperationsChanged} />
         </div>
       </section>
     </DashboardLayout>

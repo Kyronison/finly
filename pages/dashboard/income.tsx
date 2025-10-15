@@ -9,7 +9,7 @@ import { IncomeBreakdownList } from '@/components/IncomeBreakdownList';
 import { CategoryForm } from '@/components/CategoryForm';
 import { CategoryList } from '@/components/CategoryList';
 import { ExpenseForm } from '@/components/ExpenseForm';
-import { IncomeImport } from '@/components/ExpenseImport';
+import { IncomeChart } from '@/components/IncomeChart';
 import { useDashboardData } from '@/hooks/useDashboardData';
 import { getAuthenticatedUser, type AuthenticatedUser } from '@/lib/getAuthenticatedUser';
 import styles from '@/styles/Dashboard.module.css';
@@ -46,6 +46,11 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
     monthsWithIncome.length === 0
       ? 0
       : monthsWithIncome.reduce((sum, point) => sum + point.income, 0) / monthsWithIncome.length;
+
+  const incomeTimeline = useMemo(
+    () => monthlyPoints.map((point) => ({ date: point.date, income: point.income })),
+    [monthlyPoints],
+  );
 
   const topIncomeCategory = useMemo(() => {
     if (!incomeCategories.length) {
@@ -110,6 +115,10 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
       </section>
 
       <section className={styles.gridSingle}>
+        <IncomeChart data={incomeTimeline} />
+      </section>
+
+      <section className={styles.gridSingle}>
         <IncomeBreakdownList items={incomeBreakdown} />
       </section>
 
@@ -127,9 +136,6 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
         <CategoryList categories={incomeCategories} mode="INCOME" onChanged={handleOperationsChanged} />
       </section>
 
-      <section className={styles.gridSingle}>
-        <IncomeImport onImported={handleOperationsChanged} />
-      </section>
     </DashboardLayout>
   );
 }
