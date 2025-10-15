@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { addMonths, format, subMonths } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import useSWR from 'swr';
@@ -78,8 +78,6 @@ const timeframeDurations: Record<Exclude<Timeframe, 'ALL'>, number> = {
   '3Y': 36,
 };
 
-const allTimeStartMonth = '1900-01';
-
 export interface DashboardData {
   timeframe: Timeframe;
   periodLabel: string;
@@ -110,6 +108,24 @@ export function useDashboardData(): DashboardData {
   const currentMonth = format(new Date(), 'yyyy-MM');
   const [timeframe, setTimeframe] = useState<Timeframe>('6M');
   const [anchorMonth, setAnchorMonth] = useState(currentMonth);
+  const [allTimeStartMonth, setAllTimeStartMonth] = useState<string | null>(null);
+
+  const normalizeMonth = useCallback((value?: string | null) => {
+    if (!value) {
+      return null;
+    }
+
+    if (value.length >= 7) {
+      const candidate = value.length === 7 ? value : value.slice(0, 7);
+      const isoDate = `${candidate}-01T00:00:00`;
+      const parsed = new Date(isoDate);
+      if (!Number.isNaN(parsed.getTime())) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }, []);
 
   const formatMonthLabel = useCallback((month: string) => {
     try {
@@ -126,14 +142,14 @@ export function useDashboardData(): DashboardData {
 
   const startMonth = useMemo(() => {
     if (timeframe === 'ALL') {
-      return allTimeStartMonth;
+      return allTimeStartMonth ?? '1900-01';
     }
 
     const months = timeframeDurations[timeframe];
     const anchorDate = new Date(`${anchorMonth}-01T00:00:00`);
     const startDate = subMonths(anchorDate, Math.max(months - 1, 0));
     return format(startDate, 'yyyy-MM');
-  }, [anchorMonth, timeframe]);
+  }, [allTimeStartMonth, anchorMonth, timeframe]);
 
   const endMonth = useMemo(() => {
     if (timeframe === 'ALL') {
@@ -172,17 +188,26 @@ export function useDashboardData(): DashboardData {
   const periodLabel = useMemo(() => {
     if (timeframe === 'ALL') {
       const monthly = expenses.data?.monthly ?? [];
-      if (monthly.length === 0) {
-        return 'За всё время';
-      }
+      const monthsWithActivity = monthly.filter(
+        (point) =>
+          point.income !== 0 || point.expenses !== 0 || (point.passiveIncome ?? 0) !== 0,
+      );
 
-      const firstWithData = monthly.find((point) => point.income !== 0 || point.expenses !== 0);
-      const lastWithData = [...monthly]
-        .reverse()
-        .find((point) => point.income !== 0 || point.expenses !== 0);
+      const firstWithData = monthsWithActivity[0] ?? monthly[0];
+      const lastWithData = monthsWithActivity.length
+        ? monthsWithActivity[monthsWithActivity.length - 1]
+        : monthly[monthly.length - 1];
 
-      const first = formatMonthLabel(firstWithData?.date ?? monthly[0].date);
-      const last = formatMonthLabel(lastWithData?.date ?? monthly[monthly.length - 1].date);
+      const fallbackFirst =
+        normalizeMonth(expenses.data?.periodStart) ?? normalizeMonth(allTimeStartMonth);
+      const fallbackLast = normalizeMonth(expenses.data?.periodEnd) ?? normalizeMonth(currentMonth);
+
+      const first = formatMonthLabel(
+        normalizeMonth(firstWithData?.date) ?? fallbackFirst ?? firstWithData?.date ?? '',
+      );
+      const last = formatMonthLabel(
+        normalizeMonth(lastWithData?.date) ?? fallbackLast ?? lastWithData?.date ?? '',
+      );
 
       if (!first || !last) {
         return 'За всё время';
@@ -197,7 +222,60 @@ export function useDashboardData(): DashboardData {
     if (!startLabel || !endLabel) return '';
     if (startLabel === endLabel) return startLabel;
     return `${startLabel} — ${endLabel}`;
-  }, [endMonth, expenses.data?.monthly, formatMonthLabel, startMonth, timeframe]);
+  }, [
+    allTimeStartMonth,
+    currentMonth,
+    endMonth,
+    expenses.data?.monthly,
+    expenses.data?.periodEnd,
+    expenses.data?.periodStart,
+    formatMonthLabel,
+    normalizeMonth,
+    startMonth,
+    timeframe,
+  ]);
+
+  useEffect(() => {
+    if (timeframe !== 'ALL') {
+      if (allTimeStartMonth !== null) {
+        setAllTimeStartMonth(null);
+      }
+      return;
+    }
+
+    const monthly = expenses.data?.monthly ?? [];
+    const operations = [...(expenses.data?.expenses ?? []), ...(expenses.data?.incomes ?? [])];
+    const passiveIncomeMonths = expenses.data?.passiveIncome?.byMonth ?? [];
+
+    const collectedMonths: string[] = [];
+
+    const collect = (value?: string | null) => {
+      const normalized = normalizeMonth(value);
+      if (!normalized) return;
+      collectedMonths.push(normalized);
+    };
+
+    monthly.forEach((point) => {
+      if (point.income !== 0 || point.expenses !== 0 || (point.passiveIncome ?? 0) !== 0) {
+        collect(point.date);
+      }
+    });
+
+    operations.forEach((operation) => collect(operation.date));
+
+    passiveIncomeMonths
+      .filter((entry) => entry.amount !== 0)
+      .forEach((entry) => collect(entry.month));
+
+    if (collectedMonths.length === 0) {
+      return;
+    }
+
+    const earliest = collectedMonths.reduce((min, current) => (current < min ? current : min));
+    if (earliest !== allTimeStartMonth) {
+      setAllTimeStartMonth(earliest);
+    }
+  }, [allTimeStartMonth, expenses.data, normalizeMonth, timeframe]);
 
   const handleTimeframeChange = useCallback(
     (value: Timeframe) => {
