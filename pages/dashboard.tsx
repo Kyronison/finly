@@ -10,7 +10,7 @@ import { DashboardLayout } from '@/components/DashboardLayout';
 import { MetricCard } from '@/components/MetricCard';
 import { SpendingChart } from '@/components/SpendingChart';
 import { ExpenseForm } from '@/components/ExpenseForm';
-import { ExpenseImport, IncomeImport } from '@/components/ExpenseImport';
+import { ExpenseImport, IncomeImport, TBankImport } from '@/components/ExpenseImport';
 import { ExpenseTable } from '@/components/ExpenseTable';
 import { CategoryForm } from '@/components/CategoryForm';
 import { CategoryList } from '@/components/CategoryList';
@@ -327,9 +327,12 @@ export default function Dashboard({ user }: DashboardProps) {
         />
       </section>
 
-      <section className={styles.gridTwoColumn}>
-        <ExpenseImport onImported={handleOperationsChanged} />
-        <IncomeImport onImported={handleOperationsChanged} />
+      <section className={styles.gridSingle}>
+        <div className={styles.importGrid}>
+          <ExpenseImport onImported={handleOperationsChanged} />
+          <IncomeImport onImported={handleOperationsChanged} />
+          <TBankImport onImported={handleOperationsChanged} />
+        </div>
       </section>
 
       <section className={styles.gridSingle}>
@@ -337,6 +340,8 @@ export default function Dashboard({ user }: DashboardProps) {
           expenses={expenses.data?.expenses ?? []}
           categories={categories.data?.categories ?? []}
           onChanged={handleOperationsChanged}
+          periodStart={expenses.data?.periodStart}
+          periodEnd={expenses.data?.periodEnd}
         />
       </section>
     </DashboardLayout>
