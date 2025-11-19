@@ -1,27 +1,31 @@
-import { useMemo } from 'react';
-import type { GetServerSideProps } from 'next';
-import { useRouter } from 'next/router';
+import { useMemo } from "react";
+import type { GetServerSideProps } from "next";
+import { useRouter } from "next/router";
 
-import { DashboardLayout } from '@/components/DashboardLayout';
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { MetricCard } from '@/components/MetricCard';
-import { SpendingChart } from '@/components/SpendingChart';
-import { BreakdownList } from '@/components/BreakdownList';
-import { CategoryForm } from '@/components/CategoryForm';
-import { CategoryList } from '@/components/CategoryList';
-import { StreakCard } from '@/components/StreakCard';
-import { ExpenseForm } from '@/components/ExpenseForm';
-import { ExpenseTable } from '@/components/ExpenseTable';
-import { useDashboardData } from '@/hooks/useDashboardData';
-import { getAuthenticatedUser, type AuthenticatedUser } from '@/lib/getAuthenticatedUser';
-import styles from '@/styles/Dashboard.module.css';
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { MetricCard } from "@/components/MetricCard";
+import { SpendingChart } from "@/components/SpendingChart";
+import { BreakdownList } from "@/components/BreakdownList";
+import { CategoryForm } from "@/components/CategoryForm";
+import { CategoryList } from "@/components/CategoryList";
+import { StreakCard } from "@/components/StreakCard";
+import { ExpenseForm } from "@/components/ExpenseForm";
+import { ExpenseTable } from "@/components/ExpenseTable";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import {
+  type AuthenticatedUser,
+  getAuthenticatedUser,
+} from "@/lib/getAuthenticatedUser";
+import styles from "@/styles/Dashboard.module.css";
+import ChatWidget from "../chatbase.tsx";
 
 interface DashboardPageProps {
   user: AuthenticatedUser;
 }
 
 function formatCurrency(value: number) {
-  return `${Math.round(value).toLocaleString('ru-RU')} ₽`;
+  return `${Math.round(value).toLocaleString("ru-RU")} ₽`;
 }
 
 export default function ExpensesDashboardPage({ user }: DashboardPageProps) {
@@ -43,36 +47,45 @@ export default function ExpensesDashboardPage({ user }: DashboardPageProps) {
     () => expenses.data?.monthly ?? [],
     [expenses.data?.monthly],
   );
-  const monthsWithExpenses = monthlyPoints.filter((point) => point.expenses > 0);
-  const averageExpenses =
-    monthsWithExpenses.length === 0
-      ? 0
-      : monthsWithExpenses.reduce((sum, point) => sum + point.expenses, 0) /
-        monthsWithExpenses.length;
+  const monthsWithExpenses = monthlyPoints.filter((point) =>
+    point.expenses > 0
+  );
+  const averageExpenses = monthsWithExpenses.length === 0
+    ? 0
+    : monthsWithExpenses.reduce((sum, point) => sum + point.expenses, 0) /
+      monthsWithExpenses.length;
 
   const [latestPoint, previousPoint] = useMemo(() => {
     if (monthlyPoints.length === 0) {
       return [null, null];
     }
     const latest = monthlyPoints[monthlyPoints.length - 1];
-    const previous = monthlyPoints.length > 1 ? monthlyPoints[monthlyPoints.length - 2] : null;
+    const previous = monthlyPoints.length > 1
+      ? monthlyPoints[monthlyPoints.length - 2]
+      : null;
     return [latest, previous];
   }, [monthlyPoints]);
 
-  const expenseDelta = latestPoint && previousPoint ? latestPoint.expenses - previousPoint.expenses : null;
-  const expenseDeltaValue =
-    expenseDelta === null
-      ? '—'
-      : `${expenseDelta > 0 ? '+' : ''}${Math.round(expenseDelta).toLocaleString('ru-RU')} ₽`;
-  const expenseDeltaSubtitle = previousPoint ? 'к прошлому месяцу' : 'Нет данных для сравнения';
+  const expenseDelta = latestPoint && previousPoint
+    ? latestPoint.expenses - previousPoint.expenses
+    : null;
+  const expenseDeltaValue = expenseDelta === null
+    ? "—"
+    : `${expenseDelta > 0 ? "+" : ""}${
+      Math.round(expenseDelta).toLocaleString("ru-RU")
+    } ₽`;
+  const expenseDeltaSubtitle = previousPoint
+    ? "к прошлому месяцу"
+    : "Нет данных для сравнения";
 
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.replace('/');
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/");
   }
 
   return (
     <DashboardLayout user={user} onLogout={handleLogout}>
+      <ChatWidget />
       <DashboardHeader
         title="Расходы"
         description="Контроль расходов по категориям и динамике"
@@ -126,7 +139,10 @@ export default function ExpensesDashboardPage({ user }: DashboardPageProps) {
       </section>
 
       <section className={styles.gridTwoColumn}>
-        <ExpenseForm categories={expenseCategories} onCreated={handleOperationsChanged} />
+        <ExpenseForm
+          categories={expenseCategories}
+          onCreated={handleOperationsChanged}
+        />
       </section>
 
       <section className={styles.gridSingle}>
@@ -143,16 +159,17 @@ export default function ExpensesDashboardPage({ user }: DashboardPageProps) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps<DashboardPageProps> = async (context) => {
-  const user = await getAuthenticatedUser(context);
-  if (!user) {
-    return {
-      redirect: {
-        destination: '/',
-        permanent: false,
-      },
-    };
-  }
+export const getServerSideProps: GetServerSideProps<DashboardPageProps> =
+  async (context) => {
+    const user = await getAuthenticatedUser(context);
+    if (!user) {
+      return {
+        redirect: {
+          destination: "/",
+          permanent: false,
+        },
+      };
+    }
 
-  return { props: { user } };
-};
+    return { props: { user } };
+  };

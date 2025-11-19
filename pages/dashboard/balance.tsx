@@ -1,36 +1,44 @@
-import { useMemo } from 'react';
-import type { GetServerSideProps } from 'next';
-import { useRouter } from 'next/router';
-import { format } from 'date-fns';
-import { ru } from 'date-fns/locale';
+import { useMemo } from "react";
+import type { GetServerSideProps } from "next";
+import { useRouter } from "next/router";
+import { format } from "date-fns";
+import { ru } from "date-fns/locale";
 
-import { DashboardLayout } from '@/components/DashboardLayout';
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { MetricCard } from '@/components/MetricCard';
-import { BalanceTrendChart } from '@/components/BalanceTrendChart';
-import { ExpenseImport, IncomeImport, TBankImport } from '@/components/ExpenseImport';
-import { useDashboardData } from '@/hooks/useDashboardData';
-import { getAuthenticatedUser, type AuthenticatedUser } from '@/lib/getAuthenticatedUser';
-import styles from '@/styles/Dashboard.module.css';
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { MetricCard } from "@/components/MetricCard";
+import { BalanceTrendChart } from "@/components/BalanceTrendChart";
+import {
+  ExpenseImport,
+  IncomeImport,
+  TBankImport,
+} from "@/components/ExpenseImport";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import {
+  type AuthenticatedUser,
+  getAuthenticatedUser,
+} from "@/lib/getAuthenticatedUser";
+import styles from "@/styles/Dashboard.module.css";
+import ChatWidget from "../chatbase.tsx";
 
 interface BalanceDashboardProps {
   user: AuthenticatedUser;
 }
 
 function formatCurrency(value: number) {
-  return `${Math.round(value).toLocaleString('ru-RU')} ₽`;
+  return `${Math.round(value).toLocaleString("ru-RU")} ₽`;
 }
 
 function formatMonth(value: string | null | undefined) {
   if (!value) {
-    return '';
+    return "";
   }
   const normalized = value.length === 7 ? `${value}-01` : value.slice(0, 10);
   const parsed = new Date(`${normalized}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) {
-    return '';
+    return "";
   }
-  const label = format(parsed, 'LLLL yyyy', { locale: ru });
+  const label = format(parsed, "LLLL yyyy", { locale: ru });
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
@@ -78,25 +86,32 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
     if (!monthlyBalances.length) {
       return null;
     }
-    return monthlyBalances.reduce((best, current) => (current.balance > best.balance ? current : best));
+    return monthlyBalances.reduce((
+      best,
+      current,
+    ) => (current.balance > best.balance ? current : best));
   }, [monthlyBalances]);
 
   const worstMonth = useMemo(() => {
     if (!monthlyBalances.length) {
       return null;
     }
-    return monthlyBalances.reduce((worst, current) => (current.balance < worst.balance ? current : worst));
+    return monthlyBalances.reduce((
+      worst,
+      current,
+    ) => (current.balance < worst.balance ? current : worst));
   }, [monthlyBalances]);
 
   const savingsRate = totalIncome > 0 ? (balance / totalIncome) * 100 : 0;
 
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.replace('/');
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/");
   }
 
   return (
     <DashboardLayout user={user} onLogout={handleLogout}>
+      <ChatWidget />
       <DashboardHeader
         title="Баланс"
         description="Понимайте разницу между доходами и расходами"
@@ -123,13 +138,13 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
         <MetricCard
           title="Лучший месяц"
           value={formatCurrency(bestMonth?.balance ?? 0)}
-          subtitle={formatMonth(bestMonth?.date) || 'Нет данных'}
+          subtitle={formatMonth(bestMonth?.date) || "Нет данных"}
           accent="green"
         />
         <MetricCard
           title="Сложный месяц"
           value={formatCurrency(worstMonth?.balance ?? 0)}
-          subtitle={formatMonth(worstMonth?.date) || 'Нет данных'}
+          subtitle={formatMonth(worstMonth?.date) || "Нет данных"}
           accent="orange"
         />
       </section>
@@ -142,8 +157,8 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
         <div className={styles.balanceSummaryCard}>
           <h3>Соотношение доходов и расходов</h3>
           <p>
-            Доходы: {formatCurrency(totalIncome)} • Расходы: {formatCurrency(totalExpenses)} • Баланс:{' '}
-            {formatCurrency(balance)}
+            Доходы: {formatCurrency(totalIncome)} • Расходы:{" "}
+            {formatCurrency(totalExpenses)} • Баланс: {formatCurrency(balance)}
           </p>
         </div>
       </section>
@@ -159,16 +174,17 @@ export default function BalanceDashboardPage({ user }: BalanceDashboardProps) {
   );
 }
 
-export const getServerSideProps: GetServerSideProps<BalanceDashboardProps> = async (context) => {
-  const user = await getAuthenticatedUser(context);
-  if (!user) {
-    return {
-      redirect: {
-        destination: '/',
-        permanent: false,
-      },
-    };
-  }
+export const getServerSideProps: GetServerSideProps<BalanceDashboardProps> =
+  async (context) => {
+    const user = await getAuthenticatedUser(context);
+    if (!user) {
+      return {
+        redirect: {
+          destination: "/",
+          permanent: false,
+        },
+      };
+    }
 
-  return { props: { user } };
-};
+    return { props: { user } };
+  };

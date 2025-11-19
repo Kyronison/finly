@@ -1,17 +1,17 @@
-import { useEffect } from 'react';
-import { useRouter } from 'next/router';
-import useSWR from 'swr';
+import { useEffect } from "react";
+import { useRouter } from "next/router";
+import useSWR from "swr";
 
-import { AuthForm } from '@/components/AuthForm';
-import styles from '@/styles/Home.module.css';
+import { AuthForm } from "@/components/AuthForm";
+import styles from "@/styles/Home.module.css";
 
 export default function Home() {
   const router = useRouter();
-  const { data, mutate, isLoading } = useSWR('/api/auth/session');
+  const { data, mutate, isLoading } = useSWR("/api/auth/session");
 
   useEffect(() => {
     if (data?.user) {
-      router.replace('/dashboard');
+      router.replace("/dashboard");
     }
   }, [data, router]);
 
@@ -21,8 +21,9 @@ export default function Home() {
         <span className={styles.badge}>10 минут в месяц</span>
         <h1>Автопилот финансов и инвестиций</h1>
         <p>
-          Импорт выписок, мультипортфель, прогнозы кеш-флоу и игровые челленджи. Без рутины и «серой зоны» советов. Не
-          является индивидуальной инвестиционной рекомендацией.
+          Импорт выписок, мультипортфель, прогнозы кеш-флоу и игровые челленджи.
+          Без рутины и «серой зоны» советов. Не является индивидуальной
+          инвестиционной рекомендацией.
         </p>
         <ul className={styles.list}>
           <li>Импорт PDF/API и авто-классификация доходов и расходов</li>

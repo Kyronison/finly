@@ -1,27 +1,31 @@
-import { useMemo } from 'react';
-import type { GetServerSideProps } from 'next';
-import { useRouter } from 'next/router';
+import { useMemo } from "react";
+import type { GetServerSideProps } from "next";
+import { useRouter } from "next/router";
 
-import { DashboardLayout } from '@/components/DashboardLayout';
-import { DashboardHeader } from '@/components/dashboard/DashboardHeader';
-import { MetricCard } from '@/components/MetricCard';
-import { IncomeBreakdownList } from '@/components/IncomeBreakdownList';
-import { CategoryForm } from '@/components/CategoryForm';
-import { CategoryList } from '@/components/CategoryList';
-import { ExpenseForm } from '@/components/ExpenseForm';
-import { IncomeChart } from '@/components/IncomeChart';
-import { ExpenseTable } from '@/components/ExpenseTable';
-import { IncomeHighlightsCard } from '@/components/IncomeHighlightsCard';
-import { useDashboardData } from '@/hooks/useDashboardData';
-import { getAuthenticatedUser, type AuthenticatedUser } from '@/lib/getAuthenticatedUser';
-import styles from '@/styles/Dashboard.module.css';
+import { DashboardLayout } from "@/components/DashboardLayout";
+import { DashboardHeader } from "@/components/dashboard/DashboardHeader";
+import { MetricCard } from "@/components/MetricCard";
+import { IncomeBreakdownList } from "@/components/IncomeBreakdownList";
+import { CategoryForm } from "@/components/CategoryForm";
+import { CategoryList } from "@/components/CategoryList";
+import { ExpenseForm } from "@/components/ExpenseForm";
+import { IncomeChart } from "@/components/IncomeChart";
+import { ExpenseTable } from "@/components/ExpenseTable";
+import { IncomeHighlightsCard } from "@/components/IncomeHighlightsCard";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import {
+  type AuthenticatedUser,
+  getAuthenticatedUser,
+} from "@/lib/getAuthenticatedUser";
+import styles from "@/styles/Dashboard.module.css";
+import ChatWidget from "../chatbase.tsx";
 
 interface IncomeDashboardProps {
   user: AuthenticatedUser;
 }
 
 function formatCurrency(value: number) {
-  return `${Math.round(value).toLocaleString('ru-RU')} ₽`;
+  return `${Math.round(value).toLocaleString("ru-RU")} ₽`;
 }
 
 export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
@@ -39,14 +43,20 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
   } = useDashboardData();
 
   const totalIncome = analytics.data?.totals?.income ?? 0;
-  const passiveIncomeTotal =
-    analytics.data?.totals?.passiveIncome ?? expenses.data?.passiveIncome?.total ?? 0;
-  const activeIncomeTotal =
-    analytics.data?.totals?.activeIncome ?? totalIncome - passiveIncomeTotal;
-  const monthlyPoints = useMemo(() => expenses.data?.monthly ?? [], [expenses.data?.monthly]);
+  const passiveIncomeTotal = analytics.data?.totals?.passiveIncome ??
+    expenses.data?.passiveIncome?.total ?? 0;
+  const activeIncomeTotal = analytics.data?.totals?.activeIncome ??
+    totalIncome - passiveIncomeTotal;
+  const monthlyPoints = useMemo(() => expenses.data?.monthly ?? [], [
+    expenses.data?.monthly,
+  ]);
 
   const incomeTimeline = useMemo(
-    () => monthlyPoints.map((point) => ({ date: point.date, income: point.income })),
+    () =>
+      monthlyPoints.map((point) => ({
+        date: point.date,
+        income: point.income,
+      })),
     [monthlyPoints],
   );
 
@@ -55,16 +65,23 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
       return [null, null] as const;
     }
     const latest = monthlyPoints[monthlyPoints.length - 1];
-    const previous = monthlyPoints.length > 1 ? monthlyPoints[monthlyPoints.length - 2] : null;
+    const previous = monthlyPoints.length > 1
+      ? monthlyPoints[monthlyPoints.length - 2]
+      : null;
     return [latest, previous] as const;
   }, [monthlyPoints]);
 
-  const incomeDelta = latestPoint && previousPoint ? latestPoint.income - previousPoint.income : null;
-  const incomeDeltaValue =
-    incomeDelta === null
-      ? '—'
-      : `${incomeDelta > 0 ? '+' : ''}${Math.round(incomeDelta).toLocaleString('ru-RU')} ₽`;
-  const incomeDeltaSubtitle = previousPoint ? 'к прошлому месяцу' : 'Нет данных для сравнения';
+  const incomeDelta = latestPoint && previousPoint
+    ? latestPoint.income - previousPoint.income
+    : null;
+  const incomeDeltaValue = incomeDelta === null
+    ? "—"
+    : `${incomeDelta > 0 ? "+" : ""}${
+      Math.round(incomeDelta).toLocaleString("ru-RU")
+    } ₽`;
+  const incomeDeltaSubtitle = previousPoint
+    ? "к прошлому месяцу"
+    : "Нет данных для сравнения";
 
   const activeIncomeBreakdown = useMemo(
     () =>
@@ -85,13 +102,13 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
     () =>
       passiveIncomeTotal !== 0
         ? [
-            {
-              id: 'passive-investments',
-              name: 'Пассивный доход (инвестиции)',
-              amount: passiveIncomeTotal,
-              color: '#22c55e',
-            },
-          ]
+          {
+            id: "passive-investments",
+            name: "Пассивный доход (инвестиции)",
+            amount: passiveIncomeTotal,
+            color: "#22c55e",
+          },
+        ]
         : [],
     [passiveIncomeTotal],
   );
@@ -101,25 +118,31 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
     [activeIncomeBreakdown, passiveIncomeBreakdown],
   );
 
-  const topIncomeCategory = activeIncomeBreakdown[0] ?? passiveIncomeBreakdown[0] ?? null;
+  const topIncomeCategory = activeIncomeBreakdown[0] ??
+    passiveIncomeBreakdown[0] ?? null;
 
   const topIncomeHighlight = topIncomeCategory
-    ? { name: topIncomeCategory.name, amount: topIncomeCategory.amount, color: topIncomeCategory.color }
+    ? {
+      name: topIncomeCategory.name,
+      amount: topIncomeCategory.amount,
+      color: topIncomeCategory.color,
+    }
     : null;
 
-  const highlightTotal = topIncomeCategory?.id === 'passive-investments'
+  const highlightTotal = topIncomeCategory?.id === "passive-investments"
     ? totalIncome
     : activeIncomeTotal;
 
   const incomeOperations = expenses.data?.incomes ?? [];
 
   async function handleLogout() {
-    await fetch('/api/auth/logout', { method: 'POST' });
-    router.replace('/');
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/");
   }
 
   return (
     <DashboardLayout user={user} onLogout={handleLogout}>
+      <ChatWidget />
       <DashboardHeader
         title="Доходы"
         description="Отслеживайте источники доходов и их стабильность"
@@ -167,11 +190,18 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
 
       <section className={styles.gridTwoColumn}>
         <CategoryForm mode="INCOME" onCreated={handleOperationsChanged} />
-        <IncomeHighlightsCard topCategory={topIncomeHighlight} totalIncome={highlightTotal} />
+        <IncomeHighlightsCard
+          topCategory={topIncomeHighlight}
+          totalIncome={highlightTotal}
+        />
       </section>
 
       <section className={styles.gridSingle}>
-        <CategoryList categories={incomeCategories} mode="INCOME" onChanged={handleOperationsChanged} />
+        <CategoryList
+          categories={incomeCategories}
+          mode="INCOME"
+          onChanged={handleOperationsChanged}
+        />
       </section>
 
       <section className={styles.gridTwoColumn}>
@@ -194,21 +224,21 @@ export default function IncomeDashboardPage({ user }: IncomeDashboardProps) {
           mode="INCOME"
         />
       </section>
-
     </DashboardLayout>
   );
 }
 
-export const getServerSideProps: GetServerSideProps<IncomeDashboardProps> = async (context) => {
-  const user = await getAuthenticatedUser(context);
-  if (!user) {
-    return {
-      redirect: {
-        destination: '/',
-        permanent: false,
-      },
-    };
-  }
+export const getServerSideProps: GetServerSideProps<IncomeDashboardProps> =
+  async (context) => {
+    const user = await getAuthenticatedUser(context);
+    if (!user) {
+      return {
+        redirect: {
+          destination: "/",
+          permanent: false,
+        },
+      };
+    }
 
-  return { props: { user } };
-};
+    return { props: { user } };
+  };
