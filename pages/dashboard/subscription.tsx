@@ -171,7 +171,7 @@ export default function SubscriptionPage({ user }: SubscriptionPageProps) {
 }
 
 export const getServerSideProps: GetServerSideProps<SubscriptionPageProps> = async (context) => {
-  const user = await getAuthenticatedUser(context);
+  const user = await getAuthenticatedUser(context.req);
 
   if (!user) {
     return {
